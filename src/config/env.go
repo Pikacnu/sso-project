@@ -1,0 +1,84 @@
+package config
+
+import (
+	"encoding/json"
+	"os"
+	"strconv"
+
+	"github.com/joho/godotenv"
+)
+
+// Env holds application configuration loaded from environment variables.
+type Env struct {
+	AppName             string `json:"app_name"`
+	Port                string `json:"port"`
+	Hostname            string `json:"hostname"`
+	Debug               bool   `json:"debug"`
+	DatabaseURL         string `json:"database_url"`
+	GoogleClientID      string `json:"google_client_id"`
+	GoogleClientSecret  string `json:"google_client_secret"`
+	DiscordClientID     string `json:"discord_client_id"`
+	DiscordClientSecret string `json:"discord_client_secret"`
+	JWTSecret           string `json:"jwt_secret"`
+	ConnectionString    string `json:"connection_string"`
+}
+
+var systemEnv *Env
+
+// NewEnvFromEnv creates an Env populated from environment variables with defaults.
+func NewEnvFromEnv() *Env {
+	godotenv.Load()
+	if systemEnv != nil {
+		return systemEnv
+	}
+	systemEnv = &Env{
+		AppName:             getEnv("APP_NAME", "sso-server"),
+		Port:                getEnv("PORT", "8080"),
+		Hostname:            getEnv("HOSTNAME", "localhost"),
+		Debug:               getEnvBool("DEBUG", "false"),
+		DatabaseURL:         getEnv("DATABASE_URL", "postgres://user:pass@localhost:5432/sso_db"),
+		GoogleClientID:      getEnv("GOOGLE_CLIENT_ID", "your-google-client-id"),
+		GoogleClientSecret:  getEnv("GOOGLE_CLIENT_SECRET", "your-google-client-secret"),
+		DiscordClientID:     getEnv("DISCORD_CLIENT_ID", "your-discord-client-id"),
+		DiscordClientSecret: getEnv("DISCORD_CLIENT_SECRET", "your-discord-client-secret"),
+		JWTSecret:           getEnv("JWT_SECRET", "your-jwt-secret"),
+		ConnectionString:    getEnv("CONNECTION_STRING", "your-connection-string"),
+	}
+	return systemEnv
+}
+
+func getEnv(key, def string) string {
+	if v, ok := os.LookupEnv(key); ok && v != "" {
+		return v
+	}
+	return def
+}
+
+func getEnvBool(key, def string) bool {
+	s := getEnv(key, def)
+	b, err := strconv.ParseBool(s)
+	if err != nil {
+		return false
+	}
+	return b
+}
+
+// Format returns a pretty-printed JSON representation of the Env.
+func (e *Env) Format() string {
+	b, _ := json.MarshalIndent(e, "", "  ")
+	return string(b)
+}
+
+// BindAddr returns an address string suitable for gin.Run (adds leading ':' if missing).
+func (e *Env) BindAddr() string {
+	if e == nil {
+		return ":8080"
+	}
+	if e.Port == "" {
+		return ":8080"
+	}
+	if e.Port[0] == ':' {
+		return e.Port
+	}
+	return ":" + e.Port
+}
