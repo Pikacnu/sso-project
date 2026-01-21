@@ -21,6 +21,7 @@ func RegistryMiddleware(router *gin.Engine) {
 		gin.Recovery(),
 		ConfigMiddleware(),
 		SessionMiddleware(),
+		ClientMiddleware(),
 	}
 	router.Use(middlewares...)
 }
@@ -35,6 +36,12 @@ func SessionMiddleware() gin.HandlerFunc {
 				isProtected = true
 				break
 			}
+		}
+
+		if c.Request.Header.Get("Authorization") != "" {
+			c.Next()
+			// Skip session middleware for token-based auth
+			return
 		}
 
 		if !isProtected {
@@ -73,6 +80,26 @@ func SessionMiddleware() gin.HandlerFunc {
 		c.Set("user_id", claims["sub"])
 		c.Set("user_claims", claims)
 		c.Set("session_id", sid)
+		c.Next()
+	}
+}
+
+func ClientMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		secret := c.GetHeader("Authorization")
+		clientID := c.GetHeader("X-Client-ID")
+
+		if strings.TrimSpace(secret) == "" || strings.TrimSpace(clientID) == "" {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Missing Authorization header"})
+			return
+		}
+
+		var client db.Client
+		err := db.DBConnection.Where("id = ? AND secret = ? AND is_active = ?", clientID, secret, true).First(&client).Error
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid client credentials"})
+			return
+		}
 		c.Next()
 	}
 }
