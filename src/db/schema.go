@@ -16,10 +16,10 @@ type BaseWithExpires struct {
 	CreatedAt time.Time `gorm:"autoCreateTime"`
 	UpdatedAt time.Time `gorm:"autoUpdateTime"`
 	ExpiresAt time.Time `gorm:"not null"`
-	Scope     string    // 該 Token 實際擁有的權限範圍
+	Scope     string    // The actual scope owned by this token
 }
 
-// User 使用者資訊
+// User User information
 type User struct {
 	BaseSchema
 	ID        string    `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
@@ -31,7 +31,7 @@ type User struct {
 	Avatar    string
 }
 
-// SocialAccount 第三方登入關聯表
+// SocialAccount Third-party login association table
 type SocialAccount struct {
 	BaseSchema
 	ID         string    `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
@@ -40,11 +40,11 @@ type SocialAccount struct {
 	UserID     string    `gorm:"index;not null"`
 	User       User      `gorm:"foreignKey:UserID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
 	Provider   string    `gorm:"index;not null"`       // "google", "discord"
-	ProviderID string    `gorm:"uniqueIndex;not null"` // 第三方的唯一 ID (例如 Discord Snowflake)
+	ProviderID string    `gorm:"uniqueIndex;not null"` // Third-party unique ID (e.g., Discord Snowflake)
 }
 
-// Client OAuth2 客戶端應用
-type Client struct {
+// OAuthClient OAuth2 client application
+type OAuthClient struct {
 	BaseSchema
 	ID            string    `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
 	CreatedAt     time.Time `gorm:"autoCreateTime"`
@@ -59,45 +59,45 @@ type Client struct {
 	LogoURL       string
 }
 
-// AccessToken 存取權杖
+// AccessToken Access token
 type AccessToken struct {
 	BaseWithExpires
-	Token    string `gorm:"uniqueIndex;not null"`
-	ClientID string `gorm:"index;not null"`
-	Client   Client `gorm:"foreignKey:ClientID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
-	UserID   string `gorm:"index;not null"`
-	User     User   `gorm:"foreignKey:UserID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
+	Token    string      `gorm:"uniqueIndex;not null"`
+	ClientID string      `gorm:"index;not null"`
+	Client   OAuthClient `gorm:"foreignKey:ClientID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
+	UserID   string      `gorm:"index;not null"`
+	User     User        `gorm:"foreignKey:UserID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
 }
 
-// RefreshToken 重新整理權杖
+// RefreshToken Refresh token
 type RefreshToken struct {
 	BaseWithExpires
-	ID        string    `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
-	CreatedAt time.Time `gorm:"autoCreateTime"`
-	UpdatedAt time.Time `gorm:"autoUpdateTime"`
-	ExpiresAt time.Time `gorm:"not null"`
-	Scope     string    // 該 Token 實際擁有的權限範圍
-	Token     string    `gorm:"uniqueIndex;not null"`
-	ClientID  string    `gorm:"index;not null"`
-	Client    Client    `gorm:"foreignKey:ClientID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
-	UserID    string    `gorm:"index;not null"`
-	User      User      `gorm:"foreignKey:UserID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
+	ID        string      `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+	CreatedAt time.Time   `gorm:"autoCreateTime"`
+	UpdatedAt time.Time   `gorm:"autoUpdateTime"`
+	ExpiresAt time.Time   `gorm:"not null"`
+	Scope     string      // The actual scope owned by this token
+	Token     string      `gorm:"uniqueIndex;not null"`
+	ClientID  string      `gorm:"index;not null"`
+	Client    OAuthClient `gorm:"foreignKey:ClientID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
+	UserID    string      `gorm:"index;not null"`
+	User      User        `gorm:"foreignKey:UserID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
 }
 
-// AuthorizationCode 授權碼
+// AuthorizationCode Authorization code
 type AuthorizationCode struct {
 	BaseWithExpires
-	ID          string    `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
-	CreatedAt   time.Time `gorm:"autoCreateTime"`
-	UpdatedAt   time.Time `gorm:"autoUpdateTime"`
-	ExpiresAt   time.Time `gorm:"not null"`
-	Scope       string    // 該 Token 實際擁有的權限範圍
-	Code        string    `gorm:"uniqueIndex;not null"`
-	ClientID    string    `gorm:"index;not null"`
-	Client      Client    `gorm:"foreignKey:ClientID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
-	UserID      string    `gorm:"index;not null"`
-	User        User      `gorm:"foreignKey:UserID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
-	RedirectURI string    `gorm:"not null"`
+	ID          string      `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+	CreatedAt   time.Time   `gorm:"autoCreateTime"`
+	UpdatedAt   time.Time   `gorm:"autoUpdateTime"`
+	ExpiresAt   time.Time   `gorm:"not null"`
+	Code        string      `gorm:"uniqueIndex;not null"`
+	ClientID    string      `gorm:"index;not null"`
+	Client      OAuthClient `gorm:"foreignKey:ClientID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
+	UserID      string      `gorm:"index;not null"`
+	User        User        `gorm:"foreignKey:UserID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
+	RedirectURI string      `gorm:"not null"`
+	Scope       string      // The actual scope owned by this token
 }
 
 // Session Server-side session record
@@ -112,3 +112,65 @@ type Session struct {
 	ExpiresAt time.Time `gorm:"index;not null"`
 	IsRevoked bool      `gorm:"default:false"`
 }
+
+// OAuthFlow tracks an ongoing OAuth2 login flow between a Client, SSO, and an external Provider
+type OAuthFlow struct {
+	BaseWithExpires
+	// ClientState is the original 'state' parameter provided by the Client application
+	ClientState string `gorm:"not null"`
+
+	ClientID string      `gorm:"index;not null"`
+	Client   OAuthClient `gorm:"foreignKey:ClientID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
+
+	ID string `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+
+	UserID string `gorm:"index;not null"`
+	User   User   `gorm:"foreignKey:UserID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
+
+	RedirectURI string    `gorm:"not null"`
+	Scope       string    `gorm:"not null"`
+	Provider    string    `gorm:"not null"` // e.g., "discord", "google"
+	ExpiresAt   time.Time `gorm:"index;not null"`
+}
+
+type Scoop struct {
+	ID        string      `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+	CreatedAt time.Time   `gorm:"autoCreateTime"`
+	UpdatedAt time.Time   `gorm:"autoUpdateTime"`
+	ClientID  string      `gorm:"index;not null"`
+	Client    OAuthClient `gorm:"foreignKey:ClientID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
+
+	// Key is the unique identifier for the scope, e.g., "storage.user"
+	Key  string `gorm:"index;not null"`
+	Data string `gorm:"type:text"` // JSON data corresponding to this scope
+
+	// Optional UserID if the data is user-specific
+	UserID *string `gorm:"index"`
+	User   *User   `gorm:"foreignKey:UserID;references:ID"`
+}
+
+/*
+Scoop Example (1 row per scope):
+
+If a service (ClientID) wants to share multiple types of user data, multiple records will be created:
+
+Record 1:
+{
+	Key:    "storage.user",
+	Data:   "{\"id\": \"user-123\", \"name\": \"John\"}",
+	UserID: "user-uuid",
+	ClientID: "client-uuid"
+}
+
+Record 2:
+{
+	Key:    "storage.config",
+	Data:   "{\"theme\": \"dark\", \"lang\": \"en-US\"}",
+	UserID: "user-uuid",
+	ClientID: "client-uuid"
+}
+
+Usage:
+	1. Check if the Scope in AccessToken includes "storage.user".
+	2. If included, query the Scoop content where Key is "storage.user".
+*/

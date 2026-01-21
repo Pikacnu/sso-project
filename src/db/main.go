@@ -14,11 +14,13 @@ func ApplyMigrations(db *gorm.DB) error {
 	return db.AutoMigrate(
 		&User{},
 		&SocialAccount{},
-		&Client{},
+		&OAuthClient{},
 		&AccessToken{},
 		&RefreshToken{},
 		&AuthorizationCode{},
 		&Session{},
+		&Scoop{},
+		&OAuthFlow{},
 	)
 }
 

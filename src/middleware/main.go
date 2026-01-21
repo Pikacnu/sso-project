@@ -94,7 +94,7 @@ func ClientMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		var client db.Client
+		var client db.OAuthClient
 		err := db.DBConnection.Where("id = ? AND secret = ? AND is_active = ?", clientID, secret, true).First(&client).Error
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid client credentials"})
