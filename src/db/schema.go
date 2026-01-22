@@ -62,16 +62,6 @@ type OAuthClient struct {
 // AccessToken Access token
 type AccessToken struct {
 	BaseWithExpires
-	Token    string      `gorm:"uniqueIndex;not null"`
-	ClientID string      `gorm:"index;not null"`
-	Client   OAuthClient `gorm:"foreignKey:ClientID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
-	UserID   string      `gorm:"index;not null"`
-	User     User        `gorm:"foreignKey:UserID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
-}
-
-// RefreshToken Refresh token
-type RefreshToken struct {
-	BaseWithExpires
 	ID        string      `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
 	CreatedAt time.Time   `gorm:"autoCreateTime"`
 	UpdatedAt time.Time   `gorm:"autoUpdateTime"`
@@ -82,6 +72,23 @@ type RefreshToken struct {
 	Client    OAuthClient `gorm:"foreignKey:ClientID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
 	UserID    string      `gorm:"index;not null"`
 	User      User        `gorm:"foreignKey:UserID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
+}
+
+// RefreshToken Refresh token
+type RefreshToken struct {
+	BaseWithExpires
+	ID            string      `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+	CreatedAt     time.Time   `gorm:"autoCreateTime"`
+	UpdatedAt     time.Time   `gorm:"autoUpdateTime"`
+	ExpiresAt     time.Time   `gorm:"not null"`
+	AccessTokenID string      `gorm:"index;not null"`
+	AccessToken   AccessToken `gorm:"foreignKey:AccessTokenID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
+	Scope         string      // The actual scope owned by this token
+	Token         string      `gorm:"uniqueIndex;not null"`
+	ClientID      string      `gorm:"index;not null"`
+	Client        OAuthClient `gorm:"foreignKey:ClientID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
+	UserID        string      `gorm:"index;not null"`
+	User          User        `gorm:"foreignKey:UserID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
 }
 
 // AuthorizationCode Authorization code

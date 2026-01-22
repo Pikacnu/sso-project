@@ -35,6 +35,12 @@ func StartWebServer() {
 		})
 	})
 
+	router.GET("/health", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{
+			"status": "healthy",
+		})
+	})
+
 	for _, register := range routes {
 		register(router)
 	}

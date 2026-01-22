@@ -64,8 +64,8 @@ func SessionMiddleware() gin.HandlerFunc {
 		}
 
 		// 2. Server-side Session Validation
-		sid, ok := claims["sid"].(string)
-		if !ok {
+		sid := claims.Sid
+		if sid == "" {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid session data"})
 			return
 		}
@@ -77,7 +77,7 @@ func SessionMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		c.Set("user_id", claims["sub"])
+		c.Set("user_id", claims.Sub)
 		c.Set("user_claims", claims)
 		c.Set("session_id", sid)
 		c.Next()
