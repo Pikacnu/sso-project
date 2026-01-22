@@ -94,22 +94,24 @@ type RefreshToken struct {
 // AuthorizationCode Authorization code
 type AuthorizationCode struct {
 	BaseWithExpires
-	ID          string      `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
-	CreatedAt   time.Time   `gorm:"autoCreateTime"`
-	UpdatedAt   time.Time   `gorm:"autoUpdateTime"`
-	ExpiresAt   time.Time   `gorm:"not null"`
-	Code        string      `gorm:"uniqueIndex;not null"`
-	ClientID    string      `gorm:"index;not null"`
-	Client      OAuthClient `gorm:"foreignKey:ClientID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
-	UserID      string      `gorm:"index;not null"`
-	User        User        `gorm:"foreignKey:UserID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
-	RedirectURI string      `gorm:"not null"`
-	Scope       string      // The actual scope owned by this token
+	ID                  string      `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+	CreatedAt           time.Time   `gorm:"autoCreateTime"`
+	UpdatedAt           time.Time   `gorm:"autoUpdateTime"`
+	ExpiresAt           time.Time   `gorm:"not null"`
+	Code                string      `gorm:"uniqueIndex;not null"`
+	ClientID            string      `gorm:"index;not null"`
+	Client              OAuthClient `gorm:"foreignKey:ClientID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
+	UserID              string      `gorm:"index;not null"`
+	User                User        `gorm:"foreignKey:UserID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
+	RedirectURI         string      `gorm:"not null"`
+	Scope               string      // The actual scope owned by this token
+	CodeChallenge       string      // PKCE code challenge
+	CodeChallengeMethod string      // PKCE method: "plain" or "S256"
 }
 
 // Session Server-side session record
 type Session struct {
-	ID        string    `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+	ID        string    `gorm:"type:varchar(255);primaryKey"`
 	CreatedAt time.Time `gorm:"autoCreateTime"`
 	UpdatedAt time.Time `gorm:"autoUpdateTime"`
 	UserID    string    `gorm:"index;not null"`
@@ -129,15 +131,17 @@ type OAuthFlow struct {
 	ClientID string      `gorm:"index;not null"`
 	Client   OAuthClient `gorm:"foreignKey:ClientID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
 
-	ID string `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+	ID string `gorm:"type:varchar(255);primaryKey"`
 
 	UserID string `gorm:"index;not null"`
 	User   User   `gorm:"foreignKey:UserID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
 
-	RedirectURI string    `gorm:"not null"`
-	Scope       string    `gorm:"not null"`
-	Provider    string    `gorm:"not null"` // e.g., "discord", "google"
-	ExpiresAt   time.Time `gorm:"index;not null"`
+	RedirectURI         string    `gorm:"not null"`
+	Scope               string    `gorm:"not null"`
+	Provider            string    `gorm:"not null"` // e.g., "discord", "google"
+	ExpiresAt           time.Time `gorm:"index;not null"`
+	CodeChallenge       string    // PKCE code challenge
+	CodeChallengeMethod string    // PKCE method: "plain" or "S256"
 }
 
 type Scoop struct {

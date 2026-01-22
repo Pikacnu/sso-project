@@ -26,5 +26,4 @@ func userInfoHandler(c *gin.Context) {
 		"email": claims.Email,
 		"exp":   claims.ExpiresAt,
 	})
-
 }

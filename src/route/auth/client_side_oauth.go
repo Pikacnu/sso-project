@@ -172,18 +172,32 @@ func callBackHandler(ctx *gin.Context) {
 			ctx.AbortWithError(http.StatusInternalServerError, err)
 			return
 		}
+
+		var flowData OAuthFlow
+		err = DBConnection.Model(&OAuthFlow{}).Where("oauth_id = ? AND expires_at > ?", oauthID, time.Now()).Take(&flowData).Error
+		if err != nil {
+			ctx.AbortWithError(http.StatusInternalServerError, err)
+			return
+		}
+
 		protocol := "http"
 		if ctx.Request.TLS != nil {
 			protocol = "https"
 		}
-		redirectURL = protocol + "://" + ctx.Request.Host + "/auth/callback?code=" + oauthID
+		redirectURL = protocol + "://" + ctx.Request.Host + "/auth/callback?code=" + oauthID + "&state=" + flowData.ClientState
 		ctx.Redirect(http.StatusTemporaryRedirect, redirectURL)
 		return
 	}
 
-	// Create server-side session
+	// Create server-side session with secure ID
+	sessionID, err := auth.GenerateSecureToken()
+	if err != nil {
+		ctx.AbortWithError(http.StatusInternalServerError, err)
+		return
+	}
+
 	newSession := Session{
-		ID:        uuid.New().String(),
+		ID:        sessionID,
 		UserID:    user.ID,
 		UserAgent: ctx.GetHeader("User-Agent"),
 		IPAddress: ctx.ClientIP(),
