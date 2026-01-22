@@ -2,6 +2,7 @@ package auth
 
 import (
 	"net/http"
+	"slices"
 	"sso-server/src/auth"
 	. "sso-server/src/db"
 	"strings"
@@ -13,7 +14,7 @@ import (
 func authorizeHandler(ctx *gin.Context) {
 	clientId := ctx.Query("client_id")
 	redirectUri := ctx.Query("redirect_uri")
-	scoope := ctx.Query("scope")
+	scope := ctx.Query("scope")
 	state := ctx.Query("state")
 	providor := ctx.Query("provider")
 
@@ -21,7 +22,7 @@ func authorizeHandler(ctx *gin.Context) {
 	codeChallenge := ctx.Query("code_challenge")
 	codeChallengeMethod := ctx.Query("code_challenge_method")
 
-	if clientId == "" || redirectUri == "" || scoope == "" || state == "" {
+	if clientId == "" || redirectUri == "" || scope == "" || state == "" {
 		ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Missing required parameters"})
 		return
 	}
@@ -37,33 +38,42 @@ func authorizeHandler(ctx *gin.Context) {
 		}
 	}
 
-	var result *OAuthClient = nil
+	var authenticatedOAuthClient *OAuthClient = nil
 	// Check if client ID is valid
-	err := DBConnection.Model(&OAuthClient{}).Where("client_id = ?", clientId).Take(&result).Error
+	err := DBConnection.Model(&OAuthClient{}).Where("client_id = ?", clientId).Take(&authenticatedOAuthClient).Error
 
-	if err != nil || result == nil {
+	if err != nil || authenticatedOAuthClient == nil {
 		ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid client_id"})
 		return
 	}
 
-	allowRedirectUri := strings.Split(result.RedirectURIs, ",")
-	isValidRedirectUri := false
-	for _, uri := range allowRedirectUri {
-		if uri == redirectUri {
-			isValidRedirectUri = true
-			break
-		}
-	}
+	allowRedirectUri := strings.Split(authenticatedOAuthClient.RedirectURIs, ",")
 
-	if !isValidRedirectUri {
+	if !slices.Contains(allowRedirectUri, redirectUri) {
 		ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid redirect_uri"})
 		return
 	}
 
-	scoopes := strings.Split(scoope, ",")
-	scoopData := &[]Scoop{}
-	DBConnection.Model(&Scoop{}).Where("key IN ?", scoopes).Find(scoopData)
-	if len(*scoopData) != len(scoopes) {
+	allowScopes := strings.Split(authenticatedOAuthClient.AllowedScopes, ",")
+
+	scopes := strings.Split(scope, ",")
+	scopeData := []Scope{}
+
+	isValidScope := true
+	for _, s := range scopes {
+		if !slices.Contains(allowScopes, s) {
+			isValidScope = false
+			break
+		}
+	}
+
+	if !isValidScope {
+		ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid scope"})
+		return
+	}
+
+	DBConnection.Model(&Scope{}).Where("key IN ?", scopes).Find(&scopeData)
+	if len(scopeData) != len(scopes) {
 		ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid scope"})
 		return
 	}
@@ -86,11 +96,11 @@ func authorizeHandler(ctx *gin.Context) {
 	}
 
 	OAuthFlowData := OAuthFlow{
-		ClientID:            result.ID,
+		ClientID:            authenticatedOAuthClient.ID,
 		RedirectURI:         redirectUri,
 		Provider:            providor,
 		ClientState:         state,
-		Scope:               scoope,
+		Scope:               scope,
 		ExpiresAt:           time.Now().Add(5 * time.Minute),
 		ID:                  flowID,
 		CodeChallenge:       codeChallenge,

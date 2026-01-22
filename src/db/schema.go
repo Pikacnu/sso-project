@@ -144,7 +144,7 @@ type OAuthFlow struct {
 	CodeChallengeMethod string    // PKCE method: "plain" or "S256"
 }
 
-type Scoop struct {
+type Scope struct {
 	ID        string      `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
 	CreatedAt time.Time   `gorm:"autoCreateTime"`
 	UpdatedAt time.Time   `gorm:"autoUpdateTime"`

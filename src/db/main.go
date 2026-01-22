@@ -19,7 +19,7 @@ func ApplyMigrations(db *gorm.DB) error {
 		&RefreshToken{},
 		&AuthorizationCode{},
 		&Session{},
-		&Scoop{},
+		&Scope{},
 		&OAuthFlow{},
 	)
 }
