@@ -1,6 +1,8 @@
 package wellknown
 
 import (
+	"sso-server/src/auth"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -96,19 +98,8 @@ type JWK struct {
 }
 
 func jwksHandler(ctx *gin.Context) {
-	jwks := JWKS{
-		Keys: []JWK{
-			{
-				Kid: "1",
-				Kty: "RSA",
-				Use: "sig",
-				Alg: "RS256",
-				N:   "",
-				E:   "",
-			},
-		},
-	}
-	ctx.JSON(200, jwks)
+	keyPairs := auth.GetAvailableKeyPair()
+	ctx.JSON(200, keyPairs)
 }
 
 func getIssuer(ctx *gin.Context) string {

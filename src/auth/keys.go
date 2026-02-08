@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"sso-server/ent/generated/openidkey"
-	dbpkg "sso-server/src/db"
+	ent "sso-server/src/db"
 
 	"entgo.io/ent/dialect/sql"
 )
@@ -21,7 +21,7 @@ var currentKeyPair *KeyPair
 
 func InitKey() {
 	ctxBg := context.Background()
-	queryKeyPair, err := dbpkg.Client.OpenIDKey.Query().
+	queryKeyPair, err := ent.Client.OpenIDKey.Query().
 		Where(openidkey.IsActiveEQ(true)).
 		Order(openidkey.ByCreatedAt(sql.OrderDesc())).Only(ctxBg)
 	if err == nil && queryKeyPair != nil {
@@ -100,7 +100,7 @@ func GenerateKeys() (*KeyPair, error) {
 
 	// Persist using Ent
 	ctx := context.Background()
-	if _, err := dbpkg.Client.OpenIDKey.Create().
+	if _, err := ent.Client.OpenIDKey.Create().
 		SetKid(kid).
 		SetPrivateKey(string(privateKeyPEM)).
 		SetPublicKey(string(publicKeyPEM)).
@@ -121,12 +121,46 @@ func encodeToBase64URL(data []byte) string {
 	return base64.RawURLEncoding.EncodeToString(data)
 }
 
+func decodeBase64URL(s string) []byte {
+	data, _ := base64.RawURLEncoding.DecodeString(s)
+	return data
+}
+
 func cleanupOldKeys() {
 	expireDays := cfg.OpenIDKeyExpireDays
 	ctxBg := context.Background()
 	cutoffTime := time.Now().AddDate(0, 0, -expireDays)
-	_, err := dbpkg.Client.OpenIDKey.Delete().Where(openidkey.CreatedAtLT(cutoffTime)).Exec(ctxBg)
+	_, err := ent.Client.OpenIDKey.Delete().Where(openidkey.CreatedAtLT(cutoffTime)).Exec(ctxBg)
 	if err != nil {
 		// Log error but don't panic
 	}
+}
+
+type JWK struct {
+	Kid string `json:"kid"` // Key ID
+	Kty string `json:"kty"` // Key Type (e.g., RSA)
+	Use string `json:"use"` // Public Key Use (e.g., sig for signature)
+	Alg string `json:"alg"` // Algorithm (e.g., RS256)
+	N   string `json:"n"`   // Modulus for RSA
+	E   string `json:"e"`   // Exponent for RSA
+}
+
+func GetAvailableKeyPair() []JWK {
+	ctxBg := context.Background()
+	KeyPairsFromDB, err := ent.Client.OpenIDKey.Query().Where(openidkey.IsActiveEQ(true)).Order(openidkey.ByCreatedAt(sql.OrderDesc())).All(ctxBg)
+	ResultKeyPairs := make([]JWK, 0)
+	if err == nil {
+		for _, k := range KeyPairsFromDB {
+			ResultKeyPairs = append(ResultKeyPairs,
+				JWK{
+					Kid: k.Kid,
+					Kty: "RSA",
+					Use: "sig",
+					Alg: "RS256",
+					N:   k.Modulus,
+					E:   k.Exponent,
+				})
+		}
+	}
+	return ResultKeyPairs
 }
