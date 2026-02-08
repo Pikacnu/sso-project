@@ -5,11 +5,12 @@ import (
 	"sso-server/src/config"
 
 	"database/sql"
+	ent "sso-server/ent/generated"
+
 	entsql "entgo.io/ent/dialect/sql"
 	_ "github.com/lib/pq"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	ent "sso-server/ent/generated"
 )
 
 var Client *ent.Client
