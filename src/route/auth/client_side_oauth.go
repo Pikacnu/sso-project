@@ -211,13 +211,13 @@ func callBackHandler(ctx *gin.Context) {
 		return
 	}
 
-	// Create JWT with session ID using legacy db types expected by GenerateJWT
+	// Create JWT with session ID using ent data mapped to JWT payload types
 	avatarStr := ""
 	if userEnt.Avatar != nil {
 		avatarStr = *userEnt.Avatar
 	}
-	dbUser := dbpkg.User{ID: userEnt.ID, Email: userEnt.Email, Username: userEnt.Username, Avatar: avatarStr}
-	dbSession := dbpkg.Session{ID: sessionID, UserID: dbUser.ID, ExpiresAt: exp}
+	dbUser := dbpkg.UserJWTPayload{ID: userEnt.ID, Email: userEnt.Email, Username: userEnt.Username, Avatar: avatarStr}
+	dbSession := dbpkg.SessionJWTPayload{ID: sessionID, UserID: dbUser.ID, ExpiresAt: exp}
 	tokenString, err := auth.GenerateJWT(dbUser, dbSession)
 	if err != nil {
 		ctx.AbortWithError(http.StatusInternalServerError, err)

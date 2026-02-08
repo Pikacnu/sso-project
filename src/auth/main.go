@@ -34,7 +34,7 @@ type CustomClaims struct {
 	jwt.RegisteredClaims
 }
 
-func GenerateJWT(user db.User, session db.Session) (string, error) {
+func GenerateJWT(user db.UserJWTPayload, session db.SessionJWTPayload) (string, error) {
 	claims := CustomClaims{
 		Sub:    user.ID,
 		Sid:    session.ID,
