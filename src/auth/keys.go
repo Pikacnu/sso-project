@@ -11,7 +11,6 @@ import (
 	"os"
 	"time"
 
-	ent "sso-server/ent/generated"
 	"sso-server/ent/generated/openidkey"
 	dbpkg "sso-server/src/db"
 
@@ -20,9 +19,11 @@ import (
 
 var currentKeyPair *KeyPair
 
-func init() {
+func InitKey() {
 	ctxBg := context.Background()
-	queryKeyPair, err := dbpkg.Client.OpenIDKey.Query().Order(openidkey.ByCreatedAt(sql.OrderDesc())).Only(ctxBg)
+	queryKeyPair, err := dbpkg.Client.OpenIDKey.Query().
+		Where(openidkey.IsActiveEQ(true)).
+		Order(openidkey.ByCreatedAt(sql.OrderDesc())).Only(ctxBg)
 	if err == nil && queryKeyPair != nil {
 		// Try to load private key PEM first
 		if queryKeyPair.PrivateKey != "" {
@@ -39,31 +40,10 @@ func init() {
 				}
 			}
 		}
-
-		// Fallback: try to parse public key PEM
-		if queryKeyPair != nil && queryKeyPair.PublicKey != "" {
-			blockPub, _ := pem.Decode([]byte(queryKeyPair.PublicKey))
-			if blockPub != nil {
-				if pubIf, err := x509.ParsePKIXPublicKey(blockPub.Bytes); err == nil {
-					if pub, ok := pubIf.(*rsa.PublicKey); ok {
-						currentKeyPair = &KeyPair{
-							PrivateKey: nil,
-							PublicKey:  pub,
-							Modulus:    queryKeyPair.Modulus,
-							Exponent:   queryKeyPair.Exponent,
-						}
-						return
-					}
-				}
-			}
-		}
-	} else if !ent.IsNotFound(err) {
-		// Only panic if error is not NotFound (which is expected for first run)
-		panic("failed to query openidkey: " + err.Error())
 	}
 
 	// No key found or failed to parse: generate and persist a new keypair
-	kp, err := generateKeys()
+	kp, err := GenerateKeys()
 	if err != nil {
 		panic(err)
 	}
@@ -82,7 +62,7 @@ type KeyPair struct {
 	Exponent   string
 }
 
-func generateKeys() (*KeyPair, error) {
+func GenerateKeys() (*KeyPair, error) {
 	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		return nil, err

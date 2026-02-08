@@ -24,15 +24,15 @@ type Env struct {
 	OpenIDKeyExpireDays int    `json:"openid_key_expire_days"`
 }
 
-var systemEnv *Env
+var SystemEnv *Env
 
 // NewEnvFromEnv creates an Env populated from environment variables with defaults.
 func NewEnvFromEnv() *Env {
 	godotenv.Load()
-	if systemEnv != nil {
-		return systemEnv
+	if SystemEnv != nil {
+		return SystemEnv
 	}
-	systemEnv = &Env{
+	SystemEnv = &Env{
 		AppName:             getEnv("APP_NAME", "sso-server"),
 		Port:                getEnv("PORT", "8080"),
 		Hostname:            getEnv("HOSTNAME", "localhost"),
@@ -46,7 +46,7 @@ func NewEnvFromEnv() *Env {
 		ConnectionString:    getEnv("CONNECTION_STRING", "your-connection-string"),
 		OpenIDKeyExpireDays: getEnvInt("OPENID_KEY_EXPIRE_DAYS", 30),
 	}
-	return systemEnv
+	return SystemEnv
 }
 
 func getEnv(key, def string) string {
