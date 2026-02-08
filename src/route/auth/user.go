@@ -1,9 +1,12 @@
 package auth
 
 import (
+	"context"
 	"slices"
+	ent "sso-server/ent/generated"
+	"sso-server/ent/generated/accesstoken"
 	"sso-server/src/auth"
-	. "sso-server/src/db"
+	dbpkg "sso-server/src/db"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -24,14 +27,22 @@ func userInfoHandler(c *gin.Context) {
 		return
 	}
 
-	var accessToken AccessToken
-	result := DBConnection.Where("token = ?", tokenString).First(&accessToken)
-	if result.Error != nil {
-		c.AbortWithStatusJSON(401, gin.H{"error": "Invalid token"})
+	ctxBg := context.Background()
+	atEnt, err := dbpkg.Client.AccessToken.Query().Where(accesstoken.TokenEQ(tokenString)).Only(ctxBg)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			c.AbortWithStatusJSON(401, gin.H{"error": "Invalid token"})
+		} else {
+			c.AbortWithStatusJSON(401, gin.H{"error": "Invalid token"})
+		}
 		return
 	}
 
-	scopes := strings.Split(strings.TrimSpace(accessToken.Scope), ",")
+	scopeStr := ""
+	if atEnt.Scope != nil {
+		scopeStr = *atEnt.Scope
+	}
+	scopes := strings.Split(strings.TrimSpace(scopeStr), ",")
 	if !slices.Contains(scopes, "sso.profile") {
 		c.AbortWithStatusJSON(403, gin.H{"error": "Insufficient scope"})
 		return

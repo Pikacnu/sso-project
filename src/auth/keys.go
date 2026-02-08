@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
@@ -8,18 +9,21 @@ import (
 	"encoding/pem"
 	"math/big"
 	"os"
+	"time"
 
-	"sso-server/src/db"
+	ent "sso-server/ent/generated"
+	"sso-server/ent/generated/openidkey"
+	dbpkg "sso-server/src/db"
 
-	"gorm.io/gorm"
+	"entgo.io/ent/dialect/sql"
 )
 
 var currentKeyPair *KeyPair
 
 func init() {
-	var queryKeyPair db.OpenIDKey
-	result := db.DBConnection.Order("created_at desc").First(&queryKeyPair)
-	if result.Error == nil {
+	ctxBg := context.Background()
+	queryKeyPair, err := dbpkg.Client.OpenIDKey.Query().Order(openidkey.ByCreatedAt(sql.OrderDesc())).Only(ctxBg)
+	if err == nil && queryKeyPair != nil {
 		// Try to load private key PEM first
 		if queryKeyPair.PrivateKey != "" {
 			block, _ := pem.Decode([]byte(queryKeyPair.PrivateKey))
@@ -37,7 +41,7 @@ func init() {
 		}
 
 		// Fallback: try to parse public key PEM
-		if queryKeyPair.PublicKey != "" {
+		if queryKeyPair != nil && queryKeyPair.PublicKey != "" {
 			blockPub, _ := pem.Decode([]byte(queryKeyPair.PublicKey))
 			if blockPub != nil {
 				if pubIf, err := x509.ParsePKIXPublicKey(blockPub.Bytes); err == nil {
@@ -53,6 +57,9 @@ func init() {
 				}
 			}
 		}
+	} else if !ent.IsNotFound(err) {
+		// Only panic if error is not NotFound (which is expected for first run)
+		panic("failed to query openidkey: " + err.Error())
 	}
 
 	// No key found or failed to parse: generate and persist a new keypair
@@ -111,16 +118,16 @@ func generateKeys() (*KeyPair, error) {
 	// generate a kid from modulus (short and deterministic)
 	kid := encodeToBase64URL(publicKey.N.Bytes())
 
-	dbKey := db.OpenIDKey{
-		Kid:        kid,
-		PrivateKey: string(privateKeyPEM),
-		PublicKey:  string(publicKeyPEM),
-		Modulus:    keyPair.Modulus,
-		Exponent:   keyPair.Exponent,
-		IsActive:   true,
-	}
-
-	if err := db.DBConnection.Create(&dbKey).Error; err != nil {
+	// Persist using Ent
+	ctx := context.Background()
+	if _, err := dbpkg.Client.OpenIDKey.Create().
+		SetKid(kid).
+		SetPrivateKey(string(privateKeyPEM)).
+		SetPublicKey(string(publicKeyPEM)).
+		SetModulus(keyPair.Modulus).
+		SetExponent(keyPair.Exponent).
+		SetIsActive(true).
+		Save(ctx); err != nil {
 		return nil, err
 	}
 
@@ -136,5 +143,10 @@ func encodeToBase64URL(data []byte) string {
 
 func cleanupOldKeys() {
 	expireDays := cfg.OpenIDKeyExpireDays
-	db.DBConnection.Where("created_at <", gorm.Expr("NOW() - INTERVAL '? days'", expireDays)).Delete(&db.OpenIDKey{})
+	ctxBg := context.Background()
+	cutoffTime := time.Now().AddDate(0, 0, -expireDays)
+	_, err := dbpkg.Client.OpenIDKey.Delete().Where(openidkey.CreatedAtLT(cutoffTime)).Exec(ctxBg)
+	if err != nil {
+		// Log error but don't panic
+	}
 }

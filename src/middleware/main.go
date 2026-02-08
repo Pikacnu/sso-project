@@ -1,9 +1,13 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
+	ent "sso-server/ent/generated"
+	"sso-server/ent/generated/oauthclient"
+	"sso-server/ent/generated/session"
 	"sso-server/src/auth"
-	"sso-server/src/db"
+	dbpkg "sso-server/src/db"
 	"strings"
 	"time"
 
@@ -70,12 +74,21 @@ func SessionMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		var session db.Session
-		err = db.DBConnection.Where("id = ? AND is_revoked = ? AND expires_at > ?", sid, false, time.Now()).First(&session).Error
+		ctxBg := context.Background()
+		sessionEnt, err := dbpkg.Client.Session.Query().Where(
+			session.IDEQ(sid),
+			session.IsRevokedEQ(false),
+			session.ExpiresAtGT(time.Now()),
+		).Only(ctxBg)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Session expired or revoked"})
+			if ent.IsNotFound(err) {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Session expired or revoked"})
+			} else {
+				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to query session"})
+			}
 			return
 		}
+		_ = sessionEnt // Use sessionEnt to avoid unused variable
 
 		c.Set("user_id", claims.Sub)
 		c.Set("user_claims", claims)
@@ -94,12 +107,22 @@ func ClientMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		var client db.OAuthClient
-		err := db.DBConnection.Where("id = ? AND secret = ? AND is_active = ?", clientID, secret, true).First(&client).Error
+		ctxBg := context.Background()
+		clientEnt, err := dbpkg.Client.OAuthClient.Query().Where(
+			oauthclient.IDEQ(clientID),
+			oauthclient.SecretEQ(secret),
+			oauthclient.IsActiveEQ(true),
+		).Only(ctxBg)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid client credentials"})
+			if ent.IsNotFound(err) {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid client credentials"})
+			} else {
+				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to query client"})
+			}
 			return
 		}
+		c.Set("client_id", clientEnt.ID)
+		c.Set("client", clientEnt)
 		c.Next()
 	}
 }
