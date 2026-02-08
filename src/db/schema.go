@@ -160,6 +160,18 @@ type Scope struct {
 	User   *User   `gorm:"foreignKey:UserID;references:ID"`
 }
 
+type OpenIDKey struct {
+	ID         string     `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+	CreatedAt  time.Time  `gorm:"autoCreateTime"`
+	Kid        string     `gorm:"type:varchar(255);uniqueIndex;not null"` // Key ID (kid)
+	PrivateKey string     `gorm:"type:text;not null"`                     // PEM encoded private key
+	PublicKey  string     `gorm:"type:text;not null"`                     // PEM encoded public key
+	Modulus    string     `gorm:"type:text;not null;index"`               // Base64URL encoded modulus (n)
+	Exponent   string     `gorm:"type:text;not null"`                     // Base64URL encoded exponent (e)
+	IsActive   bool       `gorm:"default:true;index"`                     // mark current active key
+	ExpiresAt  *time.Time `gorm:"index"`                                  // optional expiry for key rotation
+}
+
 /*
 Scoop Example (1 row per scope):
 

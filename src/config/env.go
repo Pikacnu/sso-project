@@ -21,6 +21,7 @@ type Env struct {
 	DiscordClientSecret string `json:"discord_client_secret"`
 	JWTSecret           string `json:"jwt_secret"`
 	ConnectionString    string `json:"connection_string"`
+	OpenIDKeyExpireDays int    `json:"openid_key_expire_days"`
 }
 
 var systemEnv *Env
@@ -43,6 +44,7 @@ func NewEnvFromEnv() *Env {
 		DiscordClientSecret: getEnv("DISCORD_CLIENT_SECRET", "your-discord-client-secret"),
 		JWTSecret:           getEnv("JWT_SECRET", "your-jwt-secret"),
 		ConnectionString:    getEnv("CONNECTION_STRING", "your-connection-string"),
+		OpenIDKeyExpireDays: getEnvInt("OPENID_KEY_EXPIRE_DAYS", 30),
 	}
 	return systemEnv
 }
@@ -52,6 +54,15 @@ func getEnv(key, def string) string {
 		return v
 	}
 	return def
+}
+
+func getEnvInt(key string, def int) int {
+	s := getEnv(key, strconv.Itoa(def))
+	i, err := strconv.Atoi(s)
+	if err != nil {
+		return 0
+	}
+	return i
 }
 
 func getEnvBool(key, def string) bool {
