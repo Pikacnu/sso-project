@@ -1,14 +1,19 @@
 package auth
 
 import (
-	"net/http"
-
 	"context"
 	"encoding/json"
+	"net/http"
 	"sso-server/src/auth"
-	. "sso-server/src/db"
-	. "sso-server/src/providors"
+	dbpkg "sso-server/src/db"
+	"sso-server/src/providors"
 	"time"
+
+	ent "sso-server/ent/generated"
+	"sso-server/ent/generated/oauthflow"
+	"sso-server/ent/generated/session"
+	"sso-server/ent/generated/socialaccount"
+	"sso-server/ent/generated/user"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -29,9 +34,9 @@ func loginHandler(ctx *gin.Context) {
 
 	switch platform {
 	case "discord":
-		OAuthConfig = DiscordOAuthConfig
+		OAuthConfig = providors.DiscordOAuthConfig
 	case "google":
-		OAuthConfig = GoogleOAuthConfig
+		OAuthConfig = providors.GoogleOAuthConfig
 	default:
 		ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Unsupported platform"})
 		return
@@ -76,9 +81,9 @@ func callBackHandler(ctx *gin.Context) {
 	var OAuthConfig *oauth2.Config
 	switch platform {
 	case "discord":
-		OAuthConfig = DiscordOAuthConfig
+		OAuthConfig = providors.DiscordOAuthConfig
 	case "google":
-		OAuthConfig = GoogleOAuthConfig
+		OAuthConfig = providors.GoogleOAuthConfig
 	default:
 		ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Unsupported platform"})
 		return
@@ -124,39 +129,43 @@ func callBackHandler(ctx *gin.Context) {
 		return
 	}
 
-	var socialAcc SocialAccount
-	var user User
-
+	ctxBg := context.Background()
 	// 1. Check if this third-party account is already linked
-	result := DBConnection.Where("provider = ? AND provider_id = ?", platform, externalID).Limit(1).Find(&socialAcc)
-	if result.RowsAffected > 0 {
+	saEnt, err := dbpkg.Client.SocialAccount.Query().Where(socialaccount.ProviderEQ(platform), socialaccount.ProviderIDEQ(externalID)).Only(ctxBg)
+	var userEnt *ent.User
+	if err == nil {
 		// Already linked, retrieve the user
-		DBConnection.First(&user, "id = ?", socialAcc.UserID)
-	} else {
+		userEnt, err = dbpkg.Client.User.Get(ctxBg, saEnt.UserID)
+		if err != nil {
+			ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to load user"})
+			return
+		}
+	} else if ent.IsNotFound(err) {
 		// 2. Not linked, check if the email already exists in the User table
-		result = DBConnection.Where("email = ?", externalEmail).Limit(1).Find(&user)
-		if result.RowsAffected == 0 {
-			// 3. Email does not exist either, create a new user
-			user = User{
-				Username: externalUsername,
-				Email:    externalEmail,
-				Avatar:   externalAvatar,
-			}
-			if err := DBConnection.Create(&user).Error; err != nil {
-				ctx.AbortWithError(http.StatusInternalServerError, err)
+		userEnt, err = dbpkg.Client.User.Query().Where(user.EmailEQ(externalEmail)).Only(ctxBg)
+		if err != nil {
+			if ent.IsNotFound(err) {
+				// 3. Email does not exist either, create a new user
+				userEntCreate, err := dbpkg.Client.User.Create().SetUsername(externalUsername).SetEmail(externalEmail).SetAvatar(externalAvatar).Save(ctxBg)
+				if err != nil {
+					ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
+					return
+				}
+				userEnt = userEntCreate
+			} else {
+				ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to query user"})
 				return
 			}
 		}
 		// 4. Create SocialAccount association
-		socialAcc = SocialAccount{
-			UserID:     user.ID,
-			Provider:   platform,
-			ProviderID: externalID,
-		}
-		if err := DBConnection.Create(&socialAcc).Error; err != nil {
-			ctx.AbortWithError(http.StatusInternalServerError, err)
+		_, err = dbpkg.Client.SocialAccount.Create().SetUserID(userEnt.ID).SetProvider(platform).SetProviderID(externalID).Save(ctxBg)
+		if err != nil {
+			ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to create social account"})
 			return
 		}
+	} else {
+		ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to query social account"})
+		return
 	}
 
 	// If there is Cookie "OAuth_ID", delete it and use it to redirect
@@ -166,17 +175,16 @@ func callBackHandler(ctx *gin.Context) {
 	}
 
 	if oauthID != "" {
-		userID := user.ID
-		err := DBConnection.Model(&OAuthClient{}).Where("id = ? AND expires_at > ?", oauthID, time.Now()).UpdateColumn("userid", userID).Error
+		userID := userEnt.ID
+		// oauthID is an OAuthFlow ID; load the flow and use its ClientID
+		flowEnt, err := dbpkg.Client.OAuthFlow.Query().Where(oauthflow.IDEQ(oauthID), oauthflow.ExpiresAtGT(time.Now())).Only(ctxBg)
 		if err != nil {
-			ctx.AbortWithError(http.StatusInternalServerError, err)
+			ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to query oauth flow"})
 			return
 		}
-
-		var flowData OAuthFlow
-		err = DBConnection.Model(&OAuthFlow{}).Where("oauth_id = ? AND expires_at > ?", oauthID, time.Now()).Take(&flowData).Error
+		_, err = dbpkg.Client.OAuthClient.UpdateOneID(flowEnt.ClientID).SetOwnerID(userID).Save(ctxBg)
 		if err != nil {
-			ctx.AbortWithError(http.StatusInternalServerError, err)
+			ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to update oauth client"})
 			return
 		}
 
@@ -184,7 +192,7 @@ func callBackHandler(ctx *gin.Context) {
 		if ctx.Request.TLS != nil {
 			protocol = "https"
 		}
-		redirectURL = protocol + "://" + ctx.Request.Host + "/auth/callback?code=" + oauthID + "&state=" + flowData.ClientState
+		redirectURL = protocol + "://" + ctx.Request.Host + "/auth/callback?code=" + oauthID + "&state=" + flowEnt.ClientState
 		ctx.Redirect(http.StatusTemporaryRedirect, redirectURL)
 		return
 	}
@@ -196,21 +204,21 @@ func callBackHandler(ctx *gin.Context) {
 		return
 	}
 
-	newSession := Session{
-		ID:        sessionID,
-		UserID:    user.ID,
-		UserAgent: ctx.GetHeader("User-Agent"),
-		IPAddress: ctx.ClientIP(),
-		ExpiresAt: time.Now().Add(time.Hour * 24 * 7), // 7 days
-	}
-	// Create session record
-	if err := DBConnection.Create(&newSession).Error; err != nil {
-		ctx.AbortWithError(http.StatusInternalServerError, err)
+	exp := time.Now().Add(time.Hour * 24 * 7) // 7 days
+	// Create session record in Ent
+	if _, err := dbpkg.Client.Session.Create().SetID(sessionID).SetUserID(userEnt.ID).SetUserAgent(ctx.GetHeader("User-Agent")).SetIPAddress(ctx.ClientIP()).SetExpiresAt(exp).Save(ctxBg); err != nil {
+		ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to create session"})
 		return
 	}
 
-	// Create JWT with session ID
-	tokenString, err := auth.GenerateJWT(user, newSession)
+	// Create JWT with session ID using legacy db types expected by GenerateJWT
+	avatarStr := ""
+	if userEnt.Avatar != nil {
+		avatarStr = *userEnt.Avatar
+	}
+	dbUser := dbpkg.User{ID: userEnt.ID, Email: userEnt.Email, Username: userEnt.Username, Avatar: avatarStr}
+	dbSession := dbpkg.Session{ID: sessionID, UserID: dbUser.ID, ExpiresAt: exp}
+	tokenString, err := auth.GenerateJWT(dbUser, dbSession)
 	if err != nil {
 		ctx.AbortWithError(http.StatusInternalServerError, err)
 		return
@@ -224,14 +232,14 @@ func callBackHandler(ctx *gin.Context) {
 	}
 }
 
-func getDiscordUser(client *http.Client) (*DiscordUser, error) {
+func getDiscordUser(client *http.Client) (*providors.DiscordUser, error) {
 	response, err := client.Get("https://discord.com/api/users/@me")
 	if err != nil {
 		return nil, err
 	}
 	defer response.Body.Close()
 
-	var discordUser DiscordUser
+	var discordUser providors.DiscordUser
 	if err := json.NewDecoder(response.Body).Decode(&discordUser); err != nil {
 		return nil, err
 	}
@@ -277,7 +285,7 @@ func logoutHandler(ctx *gin.Context) {
 		ctx.Redirect(http.StatusTemporaryRedirect, "/")
 		return
 	}
-	DBConnection.Model(&Session{}).Where("id = ?", sid).Update("is_revoked", true)
+	dbpkg.Client.Session.Update().Where(session.IDEQ(sid)).SetIsRevoked(true).Save(context.Background())
 	ctx.SetCookie("session_token", "", -1, "/", "", false, true)
 	ctx.Redirect(http.StatusTemporaryRedirect, "/")
 }

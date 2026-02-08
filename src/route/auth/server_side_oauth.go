@@ -1,8 +1,16 @@
 package auth
 
 import (
+	"context"
 	"net/http"
 	"slices"
+	ent "sso-server/ent/generated"
+	"sso-server/ent/generated/accesstoken"
+	"sso-server/ent/generated/authorizationcode"
+	"sso-server/ent/generated/oauthclient"
+	"sso-server/ent/generated/oauthflow"
+	"sso-server/ent/generated/refreshtoken"
+	"sso-server/ent/generated/scope"
 	"sso-server/src/auth"
 	. "sso-server/src/db"
 	"strings"
@@ -14,7 +22,7 @@ import (
 func authorizeHandler(ctx *gin.Context) {
 	clientId := ctx.Query("client_id")
 	redirectUri := ctx.Query("redirect_uri")
-	scope := ctx.Query("scope")
+	scopeParam := ctx.Query("scope")
 	state := ctx.Query("state")
 	providor := ctx.Query("provider")
 
@@ -22,7 +30,7 @@ func authorizeHandler(ctx *gin.Context) {
 	codeChallenge := ctx.Query("code_challenge")
 	codeChallengeMethod := ctx.Query("code_challenge_method")
 
-	if clientId == "" || redirectUri == "" || scope == "" || state == "" {
+	if clientId == "" || redirectUri == "" || scopeParam == "" || state == "" {
 		ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Missing required parameters"})
 		return
 	}
@@ -38,26 +46,28 @@ func authorizeHandler(ctx *gin.Context) {
 		}
 	}
 
-	var authenticatedOAuthClient *OAuthClient = nil
-	// Check if client ID is valid
-	err := DBConnection.Model(&OAuthClient{}).Where("client_id = ?", clientId).Take(&authenticatedOAuthClient).Error
-
-	if err != nil || authenticatedOAuthClient == nil {
-		ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid client_id"})
+	// Use Ent client to load OAuth client
+	ctxBg := context.Background()
+	oauthClientEnt, err := Client.OAuthClient.Query().Where(oauthclient.IDEQ(clientId)).Only(ctxBg)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid client_id"})
+			return
+		}
+		ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to query client"})
 		return
 	}
 
-	allowRedirectUri := strings.Split(authenticatedOAuthClient.RedirectURIs, ",")
+	allowRedirectUri := strings.Split(oauthClientEnt.RedirectUris, ",")
 
 	if !slices.Contains(allowRedirectUri, redirectUri) {
 		ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid redirect_uri"})
 		return
 	}
 
-	allowScopes := strings.Split(authenticatedOAuthClient.AllowedScopes, ",")
+	allowScopes := strings.Split(oauthClientEnt.AllowedScopes, ",")
 
-	scopes := strings.Split(scope, ",")
-	scopeData := []Scope{}
+	scopes := strings.Split(scopeParam, ",")
 
 	isValidScope := true
 	for _, s := range scopes {
@@ -72,8 +82,13 @@ func authorizeHandler(ctx *gin.Context) {
 		return
 	}
 
-	DBConnection.Model(&Scope{}).Where("key IN ?", scopes).Find(&scopeData)
-	if len(scopeData) != len(scopes) {
+	// Verify scopes exist using Ent
+	scopeEntities, err := Client.Scope.Query().Where(scope.KeyIn(scopes...)).All(ctxBg)
+	if err != nil {
+		ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to query scopes"})
+		return
+	}
+	if len(scopeEntities) != len(scopes) {
 		ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid scope"})
 		return
 	}
@@ -95,26 +110,35 @@ func authorizeHandler(ctx *gin.Context) {
 		return
 	}
 
-	OAuthFlowData := OAuthFlow{
-		ClientID:            authenticatedOAuthClient.ID,
-		RedirectURI:         redirectUri,
-		Provider:            providor,
-		ClientState:         state,
-		Scope:               scope,
-		ExpiresAt:           time.Now().Add(5 * time.Minute),
-		ID:                  flowID,
-		CodeChallenge:       codeChallenge,
-		CodeChallengeMethod: codeChallengeMethod,
+	// Prepare pointer values for optional PKCE fields
+	var ccPtr *string
+	var ccmPtr *string
+	if codeChallenge != "" {
+		ccPtr = &codeChallenge
+	}
+	if codeChallengeMethod != "" {
+		ccmPtr = &codeChallengeMethod
 	}
 
-	err = DBConnection.Model(&OAuthFlow{}).Create(&OAuthFlowData).Error
+	// Persist OAuthFlow using Ent
+	_, err = Client.OAuthFlow.Create().
+		SetClientID(oauthClientEnt.ID).
+		SetRedirectURI(redirectUri).
+		SetProvider(providor).
+		SetClientState(state).
+		SetScope(scopeParam).
+		SetExpiresAt(time.Now().Add(5 * time.Minute)).
+		SetID(flowID).
+		SetNillableCodeChallenge(ccPtr).
+		SetNillableCodeChallengeMethod(ccmPtr).
+		Save(ctxBg)
 	if err != nil {
 		ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to create authorization code"})
 		return
 	}
 
 	var redirectURL string
-	ctx.SetCookie("OAuth_ID", OAuthFlowData.ID, int(5*time.Minute/time.Second), "/", "", false, true)
+	ctx.SetCookie("OAuth_ID", flowID, int(5*time.Minute/time.Second), "/", "", false, true)
 	switch providor {
 	case "discord":
 		redirectURL = protocol + "://" + hostname + "/auth/discord/login"
@@ -150,9 +174,17 @@ func authCallbackHandler(ctx *gin.Context) {
 		return
 	}
 
-	var oauthFlow OAuthFlow
-	err := DBConnection.Model(&OAuthFlow{}).Where("id = ? AND expires_at > ?", code, time.Now()).Take(&oauthFlow).Error
-	if err != nil || oauthFlow.ID == "" || oauthFlow.ClientID == "" || state != oauthFlow.ClientState {
+	ctxBg := context.Background()
+	oauthFlowEnt, err := Client.OAuthFlow.Query().Where(oauthflow.IDEQ(code), oauthflow.ExpiresAtGT(time.Now())).Only(ctxBg)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid or expired code"})
+			return
+		}
+		ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to query oauth flow"})
+		return
+	}
+	if oauthFlowEnt.ID == "" || oauthFlowEnt.ClientID == "" || state != oauthFlowEnt.ClientState {
 		ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid or expired code"})
 		return
 	}
@@ -164,24 +196,22 @@ func authCallbackHandler(ctx *gin.Context) {
 		return
 	}
 
-	authorizationCodeData := AuthorizationCode{
-		ClientID:            oauthFlow.ClientID,
-		UserID:              oauthFlow.UserID,
-		Code:                authCode,
-		RedirectURI:         oauthFlow.RedirectURI,
-		Scope:               oauthFlow.Scope,
-		ExpiresAt:           time.Now().Add(10 * time.Minute),
-		CodeChallenge:       oauthFlow.CodeChallenge,
-		CodeChallengeMethod: oauthFlow.CodeChallengeMethod,
-	}
-
-	err = DBConnection.Model(&AuthorizationCode{}).Create(&authorizationCodeData).Error
+	// Create AuthorizationCode using Ent
+	_, err = Client.AuthorizationCode.Create().
+		SetClientID(oauthFlowEnt.ClientID).
+		SetUserID(oauthFlowEnt.UserID).
+		SetCode(authCode).
+		SetRedirectURI(oauthFlowEnt.RedirectURI).
+		SetScope(oauthFlowEnt.Scope).
+		SetExpiresAt(time.Now().Add(10 * time.Minute)).
+		SetNillableCodeChallenge(oauthFlowEnt.CodeChallenge).
+		SetNillableCodeChallengeMethod(oauthFlowEnt.CodeChallengeMethod).
+		Save(ctxBg)
 	if err != nil {
 		ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to create authorization code"})
 		return
 	}
-
-	redirectURL := oauthFlow.RedirectURI + "?code=" + authCode + "&state=" + state
+	redirectURL := oauthFlowEnt.RedirectURI + "?code=" + authCode + "&state=" + state
 	ctx.Redirect(http.StatusTemporaryRedirect, redirectURL)
 }
 
@@ -202,18 +232,25 @@ func tokenHandler(ctx *gin.Context) {
 		}
 
 		scope := ctx.PostForm("scope")
-		// Check refresh token validity
-		var existingRefreshToken RefreshToken
-		err := DBConnection.Model(&RefreshToken{}).Where("token = ?", refreshToken).Take(&existingRefreshToken).Error
-		if err != nil || existingRefreshToken.ID == "" || existingRefreshToken.ExpiresAt.Before(time.Now()) {
+		ctxBg := context.Background()
+		// Load refresh token via Ent
+		rtEnt, err := Client.RefreshToken.Query().Where(refreshtoken.TokenEQ(refreshToken)).Only(ctxBg)
+		if err != nil {
+			if ent.IsNotFound(err) {
+				ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid or expired refresh token"})
+				return
+			}
+			ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to query refresh token"})
+			return
+		}
+		if rtEnt.ExpiresAt.Before(time.Now()) {
 			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid or expired refresh token"})
 			return
 		}
 
-		// Get Access Token associated with refresh token
-		var existingAccessToken AccessToken
-		err = DBConnection.Model(&AccessToken{}).Where("id = ?", existingRefreshToken.AccessTokenID).Take(&existingAccessToken).Error
-		if err != nil || existingAccessToken.ID == "" {
+		// Load associated access token
+		atEnt, err := Client.AccessToken.Get(ctxBg, rtEnt.AccessTokenID)
+		if err != nil {
 			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid access token associated with refresh token"})
 			return
 		}
@@ -225,34 +262,29 @@ func tokenHandler(ctx *gin.Context) {
 			return
 		}
 
-		// Update access token and refresh token
-		existingAccessToken.ExpiresAt = time.Now().Add(1 * time.Hour)
+		// Update access token
+		upd := Client.AccessToken.UpdateOneID(atEnt.ID).SetExpiresAt(time.Now().Add(1 * time.Hour)).SetToken(newAccessToken)
 		if scope != "" {
-			existingAccessToken.Scope = scope
+			upd = upd.SetScope(scope)
 		}
-		existingAccessToken.Token = newAccessToken
-
-		// Update tokens in database
-		err = DBConnection.Model(&AccessToken{}).Where("id = ?", existingAccessToken.ID).Updates(&existingAccessToken).Error
+		atEnt, err = upd.Save(ctxBg)
 		if err != nil {
 			ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to update access token"})
 			return
 		}
 
-		existingRefreshToken.ExpiresAt = time.Now().Add(24 * time.Hour)
-		existingRefreshToken.AccessTokenID = existingAccessToken.ID
-		err = DBConnection.Model(&RefreshToken{}).Where("id = ?", existingRefreshToken.ID).Updates(&existingRefreshToken).Error
+		// Update refresh token's expiry and associated access token id
+		_, err = Client.RefreshToken.UpdateOneID(rtEnt.ID).SetExpiresAt(time.Now().Add(24 * time.Hour)).SetAccessTokenID(atEnt.ID).Save(ctxBg)
 		if err != nil {
 			ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to update refresh token"})
 			return
 		}
-
 		ctx.JSON(http.StatusOK, gin.H{
-			"access_token":  existingAccessToken.Token,
+			"access_token":  atEnt.Token,
 			"token_type":    "Bearer",
 			"expires_in":    3600,
-			"refresh_token": existingRefreshToken.Token,
-			"scope":         existingAccessToken.Scope,
+			"refresh_token": rtEnt.Token,
+			"scope":         atEnt.Scope,
 		})
 		return
 	}
@@ -286,42 +318,59 @@ func tokenHandler(ctx *gin.Context) {
 	// PKCE: code_verifier is required if code_challenge was provided
 	codeVerifier := ctx.PostForm("code_verifier")
 
-	// Step 1: Verify client credentials
-	var client OAuthClient
-	err := DBConnection.Model(&OAuthClient{}).
-		Where("client_id = ? AND secret = ?", clientID, clientSecret).
-		Take(&client).Error
-	if err != nil || client.ID == "" {
-		ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid client credentials"})
+	// Step 1: Verify client credentials via Ent
+	ctxBg := context.Background()
+	clientEnt, err := Client.OAuthClient.Query().Where(oauthclient.IDEQ(clientID), oauthclient.SecretEQ(clientSecret)).Only(ctxBg)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid client credentials"})
+			return
+		}
+		ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to query client"})
 		return
 	}
 
-	// Step 2: Retrieve authorization code
-	var authorizationCode AuthorizationCode
-	err = DBConnection.Model(&AuthorizationCode{}).
-		Where("code = ? AND client_id = ? AND expires_at > ?", code, client.ID, time.Now()).
-		Take(&authorizationCode).Error
-	if err != nil || authorizationCode.ID == "" || authorizationCode.UserID == "" {
+	// Step 2: Retrieve authorization code via Ent
+	authCodeEnt, err := Client.AuthorizationCode.Query().Where(
+		authorizationcode.CodeEQ(code),
+		authorizationcode.ClientIDEQ(clientEnt.ID),
+		authorizationcode.ExpiresAtGT(time.Now()),
+	).Only(ctxBg)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid or expired code"})
+			return
+		}
+		ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to query authorization code"})
+		return
+	}
+	if authCodeEnt.UserID == "" {
 		ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid or expired code"})
 		return
 	}
 
 	// Step 3: Verify redirect URI matches
-	if authorizationCode.RedirectURI != redirectURI {
+	if authCodeEnt.RedirectURI != redirectURI {
 		ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Redirect URI mismatch"})
 		return
 	}
 
-	// Step 4: PKCE Verification
-	if authorizationCode.CodeChallenge != "" {
+	// Step 4: PKCE Verification (CodeChallenge is optional pointer)
+	if authCodeEnt.CodeChallenge != nil && *authCodeEnt.CodeChallenge != "" {
 		// If code_challenge was provided during authorize, code_verifier is required
 		if codeVerifier == "" {
 			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "code_verifier required for PKCE"})
 			return
 		}
 
+		// Determine method (default to plain)
+		method := "plain"
+		if authCodeEnt.CodeChallengeMethod != nil && *authCodeEnt.CodeChallengeMethod != "" {
+			method = *authCodeEnt.CodeChallengeMethod
+		}
+
 		// Verify the code_verifier against the code_challenge
-		if !auth.VerifyCodeChallenge(codeVerifier, authorizationCode.CodeChallenge, authorizationCode.CodeChallengeMethod) {
+		if !auth.VerifyCodeChallenge(codeVerifier, *authCodeEnt.CodeChallenge, method) {
 			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid code_verifier"})
 			return
 		}
@@ -340,37 +389,35 @@ func tokenHandler(ctx *gin.Context) {
 		return
 	}
 
-	// Step 6: Create access token record
-	accessTokenData := AccessToken{
-		Token:     accessToken,
-		ClientID:  authorizationCode.ClientID,
-		UserID:    authorizationCode.UserID,
-		ExpiresAt: time.Now().Add(1 * time.Hour),
-		Scope:     authorizationCode.Scope,
-	}
-	err = DBConnection.Model(&AccessToken{}).Create(&accessTokenData).Error
+	// Step 6: Create access token record via Ent
+	atEnt, err := Client.AccessToken.Create().
+		SetToken(accessToken).
+		SetClientID(authCodeEnt.ClientID).
+		SetUserID(authCodeEnt.UserID).
+		SetExpiresAt(time.Now().Add(1 * time.Hour)).
+		SetNillableScope(authCodeEnt.Scope).
+		Save(ctxBg)
 	if err != nil {
 		ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to create access token"})
 		return
 	}
 
-	// Step 7: Create refresh token record
-	refreshTokenData := RefreshToken{
-		Token:         refreshToken,
-		ClientID:      authorizationCode.ClientID,
-		UserID:        authorizationCode.UserID,
-		ExpiresAt:     time.Now().Add(24 * time.Hour),
-		Scope:         authorizationCode.Scope,
-		AccessTokenID: accessTokenData.ID,
-	}
-	err = DBConnection.Model(&RefreshToken{}).Create(&refreshTokenData).Error
+	// Step 7: Create refresh token record via Ent
+	rtEntCreated, err := Client.RefreshToken.Create().
+		SetToken(refreshToken).
+		SetClientID(authCodeEnt.ClientID).
+		SetUserID(authCodeEnt.UserID).
+		SetExpiresAt(time.Now().Add(24 * time.Hour)).
+		SetNillableScope(authCodeEnt.Scope).
+		SetAccessTokenID(atEnt.ID).
+		Save(ctxBg)
 	if err != nil {
 		ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to create refresh token"})
 		return
 	}
 
 	// Step 8: Revoke the authorization code (one-time use)
-	err = DBConnection.Model(&AuthorizationCode{}).Where("id = ?", authorizationCode.ID).Update("expires_at", time.Now()).Error
+	_, err = Client.AuthorizationCode.UpdateOneID(authCodeEnt.ID).SetExpiresAt(time.Now()).Save(ctxBg)
 	if err != nil {
 		ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to revoke authorization code"})
 		return
@@ -378,11 +425,11 @@ func tokenHandler(ctx *gin.Context) {
 
 	// Step 9: Return tokens
 	ctx.JSON(http.StatusOK, gin.H{
-		"access_token":  accessTokenData.Token,
+		"access_token":  atEnt.Token,
 		"token_type":    "Bearer",
 		"expires_in":    3600,
-		"refresh_token": refreshTokenData.Token,
-		"scope":         accessTokenData.Scope,
+		"refresh_token": rtEntCreated.Token,
+		"scope":         atEnt.Scope,
 	})
 
 }
@@ -393,19 +440,23 @@ func introspectHandler(ctx *gin.Context) {
 		ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Missing token"})
 		return
 	}
-	var accessToken AccessToken
-	err := DBConnection.Model(&AccessToken{}).Where("token = ?", token).Take(&accessToken).Error
-	if err != nil || accessToken.ID == "" {
-		ctx.JSON(http.StatusOK, gin.H{"active": false})
+	ctxBg := context.Background()
+	atEnt, err := Client.AccessToken.Query().Where(accesstoken.TokenEQ(token)).Only(ctxBg)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			ctx.JSON(http.StatusOK, gin.H{"active": false})
+			return
+		}
+		ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to query access token"})
 		return
 	}
-	isActive := accessToken.ExpiresAt.After(time.Now())
+	isActive := atEnt.ExpiresAt.After(time.Now())
 	ctx.JSON(http.StatusOK, gin.H{
 		"active":    isActive,
-		"client_id": accessToken.ClientID,
-		"username":  accessToken.UserID,
-		"scope":     accessToken.Scope,
-		"exp":       accessToken.ExpiresAt.Unix(),
+		"client_id": atEnt.ClientID,
+		"username":  atEnt.UserID,
+		"scope":     atEnt.Scope,
+		"exp":       atEnt.ExpiresAt.Unix(),
 	})
 }
 
@@ -415,13 +466,17 @@ func revokeHandler(ctx *gin.Context) {
 		ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Missing token"})
 		return
 	}
-	var accessToken AccessToken
-	err := DBConnection.Model(&AccessToken{}).Where("token = ?", token).Take(&accessToken).Error
-	if err != nil || accessToken.ID == "" {
-		ctx.JSON(http.StatusOK, gin.H{})
+	ctxBg := context.Background()
+	atEnt, err := Client.AccessToken.Query().Where(accesstoken.TokenEQ(token)).Only(ctxBg)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			ctx.JSON(http.StatusOK, gin.H{})
+			return
+		}
+		ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to query access token"})
 		return
 	}
-	err = DBConnection.Model(&AccessToken{}).Where("id = ?", accessToken.ID).Update("expires_at", time.Now()).Error
+	_, err = Client.AccessToken.UpdateOneID(atEnt.ID).SetExpiresAt(time.Now()).Save(ctxBg)
 	if err != nil {
 		ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to revoke token"})
 		return

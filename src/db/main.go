@@ -1,45 +1,51 @@
 package db
 
 import (
+	"context"
 	"sso-server/src/config"
 
+	"database/sql"
+	entsql "entgo.io/ent/dialect/sql"
+	_ "github.com/lib/pq"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	ent "sso-server/ent/generated"
 )
 
+var Client *ent.Client
 var DBConnection *gorm.DB
 var cfg = config.NewEnvFromEnv()
 
-func ApplyMigrations(db *gorm.DB) error {
-	return db.AutoMigrate(
-		&User{},
-		&SocialAccount{},
-		&OAuthClient{},
-		&AccessToken{},
-		&RefreshToken{},
-		&AuthorizationCode{},
-		&Session{},
-		&Scope{},
-		&OAuthFlow{},
-	)
+func ApplyMigrations(client *ent.Client) error {
+	ctx := context.Background()
+	return client.Schema.Create(ctx)
 }
 
-func ConnectDatabase(dsn string) (*gorm.DB, error) {
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+func ConnectDatabase(dsn string) (*ent.Client, *sql.DB, error) {
+	drv, err := entsql.Open("postgres", dsn)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return db, nil
+	sqlDB := drv.DB()
+	client := ent.NewClient(ent.Driver(drv))
+	return client, sqlDB, nil
 }
 
 func InitDB() {
-	db, err := ConnectDatabase(cfg.ConnectionString)
+	client, sqlDB, err := ConnectDatabase(cfg.ConnectionString)
 	if err != nil {
 		panic("failed to connect database: " + err.Error())
 	}
-	err = ApplyMigrations(db)
+	err = ApplyMigrations(client)
 	if err != nil {
 		panic("failed to apply migrations: " + err.Error())
 	}
-	DBConnection = db
+	Client = client
+
+	// Also create a GORM DB connection using the same underlying sql.DB
+	gormDB, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{})
+	if err != nil {
+		panic("failed to initialize GORM DB connection: " + err.Error())
+	}
+	DBConnection = gormDB
 }
