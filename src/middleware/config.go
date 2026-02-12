@@ -23,3 +23,25 @@ func GetConfigFromContext(c *gin.Context) *config.Env {
 	}
 	return nil
 }
+
+type EmailConfig struct {
+	From         string
+	SMTPHost     string
+	SMTPPort     int
+	SMTPUser     string
+	SMTPPassword string
+}
+
+func GetEmailConfigFromContext(c *gin.Context) *EmailConfig {
+	env := GetConfigFromContext(c)
+	if env == nil {
+		return nil
+	}
+	return &EmailConfig{
+		From:         env.EmailFrom,
+		SMTPHost:     env.EmailSMTPHost,
+		SMTPPort:     env.EmailSMTPPort,
+		SMTPUser:     env.EmailSMTPUser,
+		SMTPPassword: env.EmailSMTPPassword,
+	}
+}

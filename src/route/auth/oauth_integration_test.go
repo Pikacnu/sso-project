@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"testing"
 	"time"
@@ -15,20 +16,30 @@ import (
 	"github.com/google/uuid"
 )
 
-func seedAuthorizeData(t *testing.T, client *ent.Client) (string, string) {
-	t.Helper()
-	ctx := context.Background()
-
+func cleanDB(ctx context.Context, client *ent.Client) {
+	_, _ = client.RefreshToken.Delete().Exec(ctx)
+	_, _ = client.AccessToken.Delete().Exec(ctx)
+	_, _ = client.AuthorizationCode.Delete().Exec(ctx)
 	_, _ = client.OAuthFlow.Delete().Exec(ctx)
+	_, _ = client.Session.Delete().Exec(ctx)
+	_, _ = client.SocialAccount.Delete().Exec(ctx)
 	_, _ = client.Scope.Delete().Exec(ctx)
 	_, _ = client.OAuthClient.Delete().Exec(ctx)
 	_, _ = client.User.Delete().Exec(ctx)
+	_, _ = client.OpenIDKey.Delete().Exec(ctx)
+}
 
-	clientID := "client-123"
+func seedAuthorizeData(t *testing.T, client *ent.Client) (string, string) {
+	t.Helper()
+	ctx := context.Background()
+	cleanDB(ctx, client)
+
+	clientUUID := uuid.New()
+	clientID := clientUUID.String()
 	redirectURI := "https://app.example.com/callback"
 
 	_, err := client.OAuthClient.Create().
-		SetID(clientID).
+		SetID(clientUUID).
 		SetSecret("client-secret").
 		SetRedirectUris(redirectURI).
 		SetAllowedScopes("openid,sso.profile").
@@ -38,14 +49,14 @@ func seedAuthorizeData(t *testing.T, client *ent.Client) (string, string) {
 	}
 
 	_, err = client.Scope.Create().
-		SetClientID(clientID).
+		SetClientID(clientUUID).
 		SetKey("openid").
 		Save(ctx)
 	if err != nil {
 		t.Fatalf("failed to create scope openid: %v", err)
 	}
 	_, err = client.Scope.Create().
-		SetClientID(clientID).
+		SetClientID(clientUUID).
 		SetKey("sso.profile").
 		Save(ctx)
 	if err != nil {
@@ -58,30 +69,27 @@ func seedAuthorizeData(t *testing.T, client *ent.Client) (string, string) {
 func seedTokenFlowData(t *testing.T, client *ent.Client, code string, codeChallenge string, method string) (string, string, string) {
 	t.Helper()
 	ctx := context.Background()
-
-	_, _ = client.RefreshToken.Delete().Exec(ctx)
-	_, _ = client.AccessToken.Delete().Exec(ctx)
-	_, _ = client.AuthorizationCode.Delete().Exec(ctx)
-	_, _ = client.OAuthClient.Delete().Exec(ctx)
-	_, _ = client.User.Delete().Exec(ctx)
+	cleanDB(ctx, client)
 
 	userID := uuid.New()
+	username := "testuser-" + uuid.New().String()[:8]
 	userEnt, err := client.User.Create().
 		SetID(userID).
-		SetUsername("testuser").
-		SetEmail("user@example.com").
+		SetUsername(username).
+		SetEmail(username + "@example.com").
 		SetAvatar("https://example.com/avatar.png").
 		Save(ctx)
 	if err != nil {
 		t.Fatalf("failed to create user: %v", err)
 	}
 
-	clientID := "client-abc"
+	clientUUID := uuid.New()
+	clientID := clientUUID.String()
 	clientSecret := "client-secret"
 	redirectURI := "https://app.example.com/callback"
 
 	_, err = client.OAuthClient.Create().
-		SetID(clientID).
+		SetID(clientUUID).
 		SetSecret(clientSecret).
 		SetRedirectUris(redirectURI).
 		SetAllowedScopes("openid,sso.profile").
@@ -93,7 +101,7 @@ func seedTokenFlowData(t *testing.T, client *ent.Client, code string, codeChalle
 
 	_, err = client.AuthorizationCode.Create().
 		SetCode(code).
-		SetClientID(clientID).
+		SetClientID(clientUUID).
 		SetUserID(userEnt.ID).
 		SetRedirectURI(redirectURI).
 		SetScope("sso.profile").
@@ -111,6 +119,46 @@ func seedTokenFlowData(t *testing.T, client *ent.Client, code string, codeChalle
 
 func pointerString(value string) *string {
 	return &value
+}
+
+func seedAccessTokenData(t *testing.T, client *ent.Client, token string, expiresAt time.Time) {
+	t.Helper()
+	ctx := context.Background()
+	cleanDB(ctx, client)
+
+	userID := uuid.New()
+	username := "testuser-" + uuid.New().String()[:8]
+	userEnt, err := client.User.Create().
+		SetID(userID).
+		SetUsername(username).
+		SetEmail(username + "@example.com").
+		Save(ctx)
+	if err != nil {
+		t.Fatalf("failed to create user: %v", err)
+	}
+
+	clientUUID := uuid.New()
+	clientEnt, err := client.OAuthClient.Create().
+		SetID(clientUUID).
+		SetSecret("secret").
+		SetRedirectUris("https://app.example.com/callback").
+		SetAllowedScopes("openid,sso.profile").
+		SetOwnerID(userEnt.ID).
+		Save(ctx)
+	if err != nil {
+		t.Fatalf("failed to create oauth client: %v", err)
+	}
+
+	_, err = client.AccessToken.Create().
+		SetToken(token).
+		SetClientID(clientEnt.ID).
+		SetUserID(userEnt.ID).
+		SetExpiresAt(expiresAt).
+		SetScope("sso.profile").
+		Save(ctx)
+	if err != nil {
+		t.Fatalf("failed to create access token: %v", err)
+	}
 }
 
 func TestAuthorizeHandler_CreatesFlowAndRedirect(t *testing.T) {
@@ -163,11 +211,15 @@ func TestAuthorizeHandler_CreatesFlowAndRedirect(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	flowEnt, err := client.OAuthFlow.Get(ctx, flowID)
+	flowUUID, err := uuid.Parse(flowID)
+	if err != nil {
+		t.Fatalf("failed to parse flowID: %v", err)
+	}
+	flowEnt, err := client.OAuthFlow.Get(ctx, flowUUID)
 	if err != nil {
 		t.Fatalf("failed to load oauth flow: %v", err)
 	}
-	if flowEnt.ClientID != clientID {
+	if flowEnt.ClientID.String() != clientID {
 		t.Fatalf("client_id mismatch: got %s want %s", flowEnt.ClientID, clientID)
 	}
 	if flowEnt.RedirectURI != redirectURI {
@@ -252,24 +304,23 @@ func TestTokenHandler_RefreshTokenSuccess(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	_, _ = client.RefreshToken.Delete().Exec(ctx)
-	_, _ = client.AccessToken.Delete().Exec(ctx)
-	_, _ = client.OAuthClient.Delete().Exec(ctx)
-	_, _ = client.User.Delete().Exec(ctx)
+	cleanDB(ctx, client)
 
 	userID := uuid.New()
+	username := "testuser-" + uuid.New().String()[:8]
 	userEnt, err := client.User.Create().
 		SetID(userID).
-		SetUsername("testuser").
-		SetEmail("user@example.com").
+		SetUsername(username).
+		SetEmail(username + "@example.com").
 		SetAvatar("https://example.com/avatar.png").
 		Save(ctx)
 	if err != nil {
 		t.Fatalf("failed to create user: %v", err)
 	}
 
+	clientUUID := uuid.New()
 	clientEnt, err := client.OAuthClient.Create().
-		SetID("client-refresh").
+		SetID(clientUUID).
 		SetSecret("secret").
 		SetRedirectUris("https://app.example.com/callback").
 		SetAllowedScopes("openid,sso.profile").
@@ -338,5 +389,131 @@ func TestTokenHandler_RefreshTokenSuccess(t *testing.T) {
 	}
 	if payload["refresh_token"] != rtEnt.Token {
 		t.Fatalf("refresh token mismatch")
+	}
+}
+
+func TestIntrospectHandler_ActiveToken(t *testing.T) {
+	client := openTestDB(t)
+	defer client.Close()
+	_db := db.Client
+	db.Client = client
+	defer func() { db.Client = _db }()
+
+	seedAccessTokenData(t, client, "access-introspect", time.Now().Add(1*time.Hour))
+
+	r := setupRouter()
+	r.POST("/auth/introspect", introspectHandler)
+
+	form := url.Values{}
+	form.Set("token", "access-introspect")
+
+	w := performRequest(r, http.MethodPost, "/auth/introspect", form.Encode(), "application/x-www-form-urlencoded")
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", w.Code)
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+	if payload["active"] != true {
+		t.Fatalf("expected active=true, got %v", payload["active"])
+	}
+}
+
+func TestRevokeHandler_RevokesToken(t *testing.T) {
+	client := openTestDB(t)
+	defer client.Close()
+	_db := db.Client
+	db.Client = client
+	defer func() { db.Client = _db }()
+
+	seedAccessTokenData(t, client, "access-revoke", time.Now().Add(1*time.Hour))
+
+	r := setupRouter()
+	r.POST("/auth/revoke", revokeHandler)
+	r.POST("/auth/introspect", introspectHandler)
+
+	form := url.Values{}
+	form.Set("token", "access-revoke")
+	w := performRequest(r, http.MethodPost, "/auth/revoke", form.Encode(), "application/x-www-form-urlencoded")
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", w.Code)
+	}
+
+	w = performRequest(r, http.MethodPost, "/auth/introspect", form.Encode(), "application/x-www-form-urlencoded")
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", w.Code)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+	if payload["active"] != false {
+		t.Fatalf("expected active=false, got %v", payload["active"])
+	}
+}
+
+func TestLogoutHandler_RevokesSession(t *testing.T) {
+	client := openTestDB(t)
+	defer client.Close()
+	_db := db.Client
+	db.Client = client
+	defer func() { db.Client = _db }()
+
+	cleanup := setTestKeyPair(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	cleanDB(ctx, client)
+
+	userID := uuid.New()
+	username := "testuser-" + uuid.New().String()[:8]
+	userEnt, err := client.User.Create().
+		SetID(userID).
+		SetUsername(username).
+		SetEmail(username + "@example.com").
+		Save(ctx)
+	if err != nil {
+		t.Fatalf("failed to create user: %v", err)
+	}
+
+	sessionID := uuid.New()
+	_, err = client.Session.Create().
+		SetID(sessionID).
+		SetUserID(userEnt.ID).
+		SetExpiresAt(time.Now().Add(1 * time.Hour)).
+		Save(ctx)
+	if err != nil {
+		t.Fatalf("failed to create session: %v", err)
+	}
+
+	jwtUser := db.UserJWTPayload{ID: userEnt.ID.String(), Email: userEnt.Email, Username: userEnt.Username}
+	jwtSession := db.SessionJWTPayload{ID: sessionID.String(), UserID: userEnt.ID.String(), ExpiresAt: time.Now().Add(1 * time.Hour)}
+	tokenString, err := auth.GenerateJWT(jwtUser, jwtSession)
+	if err != nil {
+		t.Fatalf("failed to generate jwt: %v", err)
+	}
+
+	r := setupRouter()
+	r.GET("/auth/logout", logoutHandler)
+
+	req, err := http.NewRequest(http.MethodGet, "/auth/logout", nil)
+	if err != nil {
+		t.Fatalf("failed to create request: %v", err)
+	}
+	req.AddCookie(&http.Cookie{Name: "session_token", Value: tokenString})
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusTemporaryRedirect {
+		t.Fatalf("expected status 307, got %d", w.Code)
+	}
+
+	updatedSession, err := client.Session.Get(ctx, sessionID)
+	if err != nil {
+		t.Fatalf("failed to load session: %v", err)
+	}
+	if !updatedSession.IsRevoked {
+		t.Fatalf("expected session to be revoked")
 	}
 }

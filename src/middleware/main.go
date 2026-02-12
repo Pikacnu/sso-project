@@ -115,9 +115,15 @@ func ClientMiddleware() gin.HandlerFunc {
 			return
 		}
 
+		clientUUID, err := uuid.Parse(clientID)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid client ID format"})
+			return
+		}
+
 		ctxBg := context.Background()
 		clientEnt, err := dbpkg.Client.OAuthClient.Query().Where(
-			oauthclient.IDEQ(clientID),
+			oauthclient.IDEQ(clientUUID),
 			oauthclient.SecretEQ(secret),
 			oauthclient.IsActiveEQ(true),
 		).Only(ctxBg)

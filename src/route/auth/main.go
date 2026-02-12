@@ -30,4 +30,7 @@ func RegisterAuthRoutes(router *gin.Engine) {
 	routerGroup.POST("/revoke", revokeHandler)
 	// User Info Routes
 	routerGroup.GET("/userinfo", userInfoHandler)
+	// Email verification routes
+	routerGroup.POST("/verify-email/request", requestEmailVerificationHandler)
+	routerGroup.GET("/verify-email", verifyEmailHandler)
 }

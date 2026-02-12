@@ -35,6 +35,7 @@ func TestGenerateIDToken_RS256Claims(t *testing.T) {
 		Email:    "user@example.com",
 		Username: "testuser",
 		Avatar:   "https://example.com/avatar.png",
+		EmailVerified: true,
 	}
 
 	clientID := "client-abc"

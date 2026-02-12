@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"entgo.io/ent"
+	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
 	"github.com/google/uuid"
@@ -14,7 +15,9 @@ type OpenIDKey struct{ ent.Schema }
 
 func (OpenIDKey) Fields() []ent.Field {
 	return []ent.Field{
-		field.String("id").DefaultFunc(func() string { return uuid.NewString() }).Immutable(),
+		field.UUID("id", uuid.Nil).Annotations(
+			entsql.DefaultExpr("uuidv7()"),
+		).Immutable().Unique(),
 		field.Time("created_at").Default(time.Now).Immutable(),
 		field.String("kid").Unique(),
 		field.String("private_key").StorageKey("private_key"),

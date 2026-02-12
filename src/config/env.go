@@ -22,6 +22,11 @@ type Env struct {
 	JWTSecret           string `json:"jwt_secret"`
 	ConnectionString    string `json:"connection_string"`
 	OpenIDKeyExpireDays int    `json:"openid_key_expire_days"`
+	EmailFrom           string `json:"email_from"`
+	EmailSMTPHost       string `json:"email_smtp_host"`
+	EmailSMTPPort       int    `json:"email_smtp_port"`
+	EmailSMTPUser       string `json:"email_smtp_user"`
+	EmailSMTPPassword   string `json:"email_smtp_password"`
 }
 
 var SystemEnv *Env
@@ -45,6 +50,11 @@ func NewEnvFromEnv() *Env {
 		JWTSecret:           getEnv("JWT_SECRET", "your-jwt-secret"),
 		ConnectionString:    getEnv("CONNECTION_STRING", "your-connection-string"),
 		OpenIDKeyExpireDays: getEnvInt("OPENID_KEY_EXPIRE_DAYS", 30),
+		EmailFrom:           getEnv("EMAIL_FROM", "no-reply@example.com"),
+		EmailSMTPHost:       getEnv("EMAIL_SMTP_HOST", ""),
+		EmailSMTPPort:       getEnvInt("EMAIL_SMTP_PORT", 587),
+		EmailSMTPUser:       getEnv("EMAIL_SMTP_USER", ""),
+		EmailSMTPPassword:   getEnv("EMAIL_SMTP_PASSWORD", ""),
 	}
 	return SystemEnv
 }

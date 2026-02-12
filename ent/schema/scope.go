@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"entgo.io/ent"
+	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
@@ -15,10 +16,12 @@ type Scope struct{ ent.Schema }
 
 func (Scope) Fields() []ent.Field {
 	return []ent.Field{
-		field.String("id").DefaultFunc(func() string { return uuid.NewString() }).Immutable(),
+		field.UUID("id", uuid.Nil).Annotations(
+			entsql.DefaultExpr("uuidv7()"),
+		).Immutable().Unique(),
 		field.Time("created_at").Default(time.Now).Immutable(),
 		field.Time("updated_at").Default(time.Now).UpdateDefault(time.Now),
-		field.String("client_id"),
+		field.UUID("client_id", uuid.Nil),
 		field.String("key"),
 		field.String("data").Optional().Nillable().StorageKey("data"),
 		field.UUID("user_id", uuid.Nil).Optional().Nillable(),

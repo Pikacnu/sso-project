@@ -116,7 +116,7 @@ func GenerateIDToken(user db.UserJWTPayload, clientID string, nonce string, auth
 		AuthTime:          authTime.Unix(),
 		Name:              user.Username,
 		Email:             user.Email,
-		EmailVerified:     true, // TODO: implement email verification
+		EmailVerified:     user.EmailVerified,
 		Picture:           user.Avatar,
 		PreferredUsername: user.Username,
 		RegisteredClaims: jwt.RegisteredClaims{

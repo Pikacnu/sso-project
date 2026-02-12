@@ -48,9 +48,16 @@ func userInfoHandler(c *gin.Context) {
 		return
 	}
 
+	userEnt, err := dbpkg.Client.User.Get(ctxBg, atEnt.UserID)
+	if err != nil {
+		c.AbortWithStatusJSON(500, gin.H{"error": "Failed to load user"})
+		return
+	}
+
 	c.JSON(200, gin.H{
-		"sub":   claims.Sub,
-		"email": claims.Email,
-		"exp":   claims.ExpiresAt,
+		"sub":            claims.Sub,
+		"email":          userEnt.Email,
+		"email_verified": userEnt.EmailVerified,
+		"exp":            claims.ExpiresAt,
 	})
 }

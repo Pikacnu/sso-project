@@ -18,12 +18,15 @@ type User struct {
 func (User) Fields() []ent.Field {
 	return []ent.Field{
 		field.UUID("id", uuid.Nil).Annotations(
-			entsql.DefaultExpr("uuid_generate_v7()"),
+			entsql.DefaultExpr("uuidv7()"),
 		).Immutable().Unique(),
 		field.Time("created_at").Default(time.Now).Immutable(),
 		field.Time("updated_at").Default(time.Now).UpdateDefault(time.Now),
 		field.String("username").Unique(),
 		field.String("email").Unique(),
+		field.Bool("email_verified").Default(false),
+		field.String("email_verification_token").Optional().Nillable(),
+		field.Time("email_verification_expires_at").Optional().Nillable(),
 		field.String("password").Optional().Nillable(),
 		field.String("avatar").Optional().Nillable(),
 	}

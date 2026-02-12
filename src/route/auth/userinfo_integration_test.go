@@ -22,7 +22,7 @@ import (
 	_ "github.com/lib/pq"
 )
 
-const defaultTestDSN = "postgres://user:pass@localhost:5433/sso_test?sslmode=disable"
+const defaultTestDSN = "postgres://user:pass@127.0.0.1:5433/sso_test?sslmode=disable"
 
 func openTestDB(t *testing.T) *ent.Client {
 	t.Helper()
@@ -49,20 +49,17 @@ func openTestDB(t *testing.T) *ent.Client {
 	return client
 }
 
-func seedUserInfoData(t *testing.T, client *ent.Client, tokenString string, scope string) {
+func seedUserInfoData(t *testing.T, client *ent.Client, tokenString string, scope string, emailVerified bool) {
 	t.Helper()
 	ctx := context.Background()
-
-	// Clear tables to avoid conflicts.
-	_, _ = client.AccessToken.Delete().Exec(ctx)
-	_, _ = client.OAuthClient.Delete().Exec(ctx)
-	_, _ = client.User.Delete().Exec(ctx)
+	cleanDB(ctx, client)
 
 	userID := uuid.New()
 	userEnt, err := client.User.Create().
 		SetID(userID).
 		SetUsername("testuser").
 		SetEmail("user@example.com").
+		SetEmailVerified(emailVerified).
 		Save(ctx)
 	if err != nil {
 		t.Fatalf("failed to create user: %v", err)
@@ -161,7 +158,7 @@ func TestUserInfoHandler_InsufficientScope(t *testing.T) {
 	defer func() { db.Client = _db }()
 
 	jwtString := newHS256Token(t, "user-123", "user@example.com")
-	seedUserInfoData(t, client, jwtString, "openid")
+	seedUserInfoData(t, client, jwtString, "openid", false)
 
 	r := setupRouter()
 	r.GET("/auth/userinfo", userInfoHandler)
@@ -180,7 +177,7 @@ func TestUserInfoHandler_Success(t *testing.T) {
 	defer func() { db.Client = _db }()
 
 	jwtString := newHS256Token(t, "user-123", "user@example.com")
-	seedUserInfoData(t, client, jwtString, "sso.profile")
+	seedUserInfoData(t, client, jwtString, "sso.profile", true)
 
 	r := setupRouter()
 	r.GET("/auth/userinfo", userInfoHandler)
@@ -201,6 +198,9 @@ func TestUserInfoHandler_Success(t *testing.T) {
 	if payload["email"] != "user@example.com" {
 		t.Fatalf("unexpected email: %v", payload["email"])
 	}
+	if payload["email_verified"] != true {
+		t.Fatalf("unexpected email_verified: %v", payload["email_verified"])
+	}
 
 	// exp can be a nested object depending on JSON marshal; just ensure it's present.
 	if _, ok := payload["exp"]; !ok {
@@ -216,7 +216,7 @@ func TestUserInfoHandler_MissingScopeToken(t *testing.T) {
 	defer func() { db.Client = _db }()
 
 	jwtString := newHS256Token(t, "user-123", "user@example.com")
-	seedUserInfoData(t, client, jwtString, "")
+	seedUserInfoData(t, client, jwtString, "", false)
 
 	r := setupRouter()
 	r.GET("/auth/userinfo", userInfoHandler)

@@ -177,14 +177,21 @@ func callBackHandler(ctx *gin.Context) {
 	if oauthID != "" {
 		userID := userEnt.ID
 		// oauthID is an OAuthFlow ID; load the flow and use its ClientID
-		flowEnt, err := dbpkg.Client.OAuthFlow.Query().Where(oauthflow.IDEQ(oauthID), oauthflow.ExpiresAtGT(time.Now())).Only(ctxBg)
+		flowUUID, err := uuid.Parse(oauthID)
+		if err != nil {
+			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid OAuth flow ID format"})
+			return
+		}
+		flowEnt, err := dbpkg.Client.OAuthFlow.Query().Where(oauthflow.IDEQ(flowUUID), oauthflow.ExpiresAtGT(time.Now())).Only(ctxBg)
 		if err != nil {
 			ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to query oauth flow"})
 			return
 		}
-		_, err = dbpkg.Client.OAuthClient.UpdateOneID(flowEnt.ClientID).SetOwnerID(userID).Save(ctxBg)
+
+		// Update flow with user ID
+		_, err = dbpkg.Client.OAuthFlow.UpdateOne(flowEnt).SetUserID(userID).Save(ctxBg)
 		if err != nil {
-			ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to update oauth client"})
+			ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to update oauth flow"})
 			return
 		}
 
@@ -213,7 +220,7 @@ func callBackHandler(ctx *gin.Context) {
 	if userEnt.Avatar != nil {
 		avatarStr = *userEnt.Avatar
 	}
-	dbUser := dbpkg.UserJWTPayload{ID: userEnt.ID.String(), Email: userEnt.Email, Username: userEnt.Username, Avatar: avatarStr}
+	dbUser := dbpkg.UserJWTPayload{ID: userEnt.ID.String(), Email: userEnt.Email, Username: userEnt.Username, Avatar: avatarStr, EmailVerified: userEnt.EmailVerified}
 	dbSession := dbpkg.SessionJWTPayload{ID: sessionID, UserID: userEnt.ID.String(), ExpiresAt: exp}
 	tokenString, err := auth.GenerateJWT(dbUser, dbSession)
 	if err != nil {

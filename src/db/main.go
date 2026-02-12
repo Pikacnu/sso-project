@@ -20,6 +20,7 @@ type UserJWTPayload struct {
 	Email    string
 	Username string
 	Avatar   string
+	EmailVerified bool
 }
 
 // SessionJWTPayload holds minimal session data for JWT generation

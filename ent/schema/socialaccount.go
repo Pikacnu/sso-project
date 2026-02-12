@@ -17,7 +17,7 @@ type SocialAccount struct{ ent.Schema }
 func (SocialAccount) Fields() []ent.Field {
 	return []ent.Field{
 		field.UUID("id", uuid.Nil).Annotations(
-			entsql.DefaultExpr("uuid_generate_v7()"),
+			entsql.DefaultExpr("uuidv7()"),
 		).Immutable().Unique(),
 		field.Time("created_at").Default(time.Now).Immutable(),
 		field.Time("updated_at").Default(time.Now).UpdateDefault(time.Now),
