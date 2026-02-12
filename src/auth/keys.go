@@ -18,7 +18,7 @@ import (
 	"github.com/google/uuid"
 )
 
-var currentKeyPair *KeyPair
+var CurrentKeyPair *KeyPair
 
 func InitKey() {
 	ctxBg := context.Background()
@@ -31,7 +31,7 @@ func InitKey() {
 			block, _ := pem.Decode([]byte(queryKeyPair.PrivateKey))
 			if block != nil {
 				if priv, err := x509.ParsePKCS1PrivateKey(block.Bytes); err == nil {
-					currentKeyPair = &KeyPair{
+					CurrentKeyPair = &KeyPair{
 						PrivateKey: priv,
 						PublicKey:  &priv.PublicKey,
 						Modulus:    queryKeyPair.Modulus,
@@ -48,7 +48,7 @@ func InitKey() {
 	if err != nil {
 		panic(err)
 	}
-	currentKeyPair = kp
+	CurrentKeyPair = kp
 }
 
 func isFileExists(filename string) bool {
@@ -119,7 +119,7 @@ func GenerateKeys() (*KeyPair, error) {
 	}
 
 	// set in-memory current key pair
-	currentKeyPair = keyPair
+	CurrentKeyPair = keyPair
 
 	return keyPair, nil
 }

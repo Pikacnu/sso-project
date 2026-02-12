@@ -21,8 +21,8 @@ func AuthorizeKeyFunc(token *jwt.Token) (any, error) {
 	case jwt.SigningMethodHS256.Alg():
 		return []byte(cfg.JWTSecret), nil
 	case jwt.SigningMethodRS256.Alg():
-		if currentKeyPair != nil && currentKeyPair.PublicKey != nil {
-			return currentKeyPair.PublicKey, nil
+		if CurrentKeyPair != nil && CurrentKeyPair.PublicKey != nil {
+			return CurrentKeyPair.PublicKey, nil
 		}
 		return nil, jwt.ErrTokenUnverifiable
 	default:
@@ -96,13 +96,13 @@ func GenerateJWT(user db.UserJWTPayload, session db.SessionJWTPayload) (string, 
 		},
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	token.Header["kid"] = currentKeyPair.Kid
+	token.Header["kid"] = CurrentKeyPair.Kid
 	return token.SignedString([]byte(cfg.JWTSecret))
 }
 
 // GenerateIDToken generates an OIDC-compliant ID Token using RS256
 func GenerateIDToken(user db.UserJWTPayload, clientID string, nonce string, authTime time.Time, issuer string) (string, error) {
-	if currentKeyPair == nil || currentKeyPair.PrivateKey == nil {
+	if CurrentKeyPair == nil || CurrentKeyPair.PrivateKey == nil {
 		return "", errors.New("RSA key pair not initialized")
 	}
 
@@ -129,17 +129,18 @@ func GenerateIDToken(user db.UserJWTPayload, clientID string, nonce string, auth
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
-	token.Header["kid"] = currentKeyPair.Kid
+	token.Header["kid"] = CurrentKeyPair.Kid
 
-	return token.SignedString(currentKeyPair.PrivateKey)
+	return token.SignedString(CurrentKeyPair.PrivateKey)
 }
 
 func ValidateJWT(tokenString string) (CustomClaims, error) {
-	token, err := jwt.Parse(tokenString, AuthorizeKeyFunc, jwt.WithExpirationRequired())
+	claims := CustomClaims{}
+	token, err := jwt.ParseWithClaims(tokenString, &claims, AuthorizeKeyFunc, jwt.WithExpirationRequired())
 	if err != nil {
 		return CustomClaims{}, err
 	}
-	if claims, ok := token.Claims.(CustomClaims); ok && token.Valid {
+	if token.Valid {
 		return claims, nil
 	}
 	return CustomClaims{}, errors.New("invalid token")
