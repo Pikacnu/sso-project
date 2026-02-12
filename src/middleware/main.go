@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 var ProtectedPaths = []string{
@@ -74,9 +75,16 @@ func SessionMiddleware() gin.HandlerFunc {
 			return
 		}
 
+		// Parse session ID to UUID
+		sessionUUID, err := uuid.Parse(sid)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid session ID format"})
+			return
+		}
+
 		ctxBg := context.Background()
 		sessionEnt, err := dbpkg.Client.Session.Query().Where(
-			session.IDEQ(sid),
+			session.IDEQ(sessionUUID),
 			session.IsRevokedEQ(false),
 			session.ExpiresAtGT(time.Now()),
 		).Only(ctxBg)

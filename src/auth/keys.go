@@ -15,6 +15,7 @@ import (
 	ent "sso-server/src/db"
 
 	"entgo.io/ent/dialect/sql"
+	"github.com/google/uuid"
 )
 
 var currentKeyPair *KeyPair
@@ -60,6 +61,7 @@ type KeyPair struct {
 	PublicKey  *rsa.PublicKey
 	Modulus    string
 	Exponent   string
+	Kid        string
 }
 
 func GenerateKeys() (*KeyPair, error) {
@@ -73,11 +75,19 @@ func GenerateKeys() (*KeyPair, error) {
 		Bytes: x509.MarshalPKCS1PrivateKey(privateKey),
 	})
 
+	// Generate a unique Key ID (kid) for this key pair
+	kidUUID, err := uuid.NewV7()
+	if err != nil {
+		return nil, err
+	}
+	kidStr := kidUUID.String()
+
 	keyPair := &KeyPair{
 		PrivateKey: privateKey,
 		PublicKey:  publicKey,
 		Modulus:    encodeToBase64URL(publicKey.N.Bytes()),
 		Exponent:   encodeToBase64URL(big.NewInt(int64(publicKey.E)).Bytes()),
+		Kid:        kidStr,
 	}
 
 	err = os.WriteFile("private_key.pem", privateKeyPEM, 0600)
@@ -95,13 +105,10 @@ func GenerateKeys() (*KeyPair, error) {
 		Bytes: pubBytes,
 	})
 
-	// generate a kid from modulus (short and deterministic)
-	kid := encodeToBase64URL(publicKey.N.Bytes())
-
 	// Persist using Ent
 	ctx := context.Background()
 	if _, err := ent.Client.OpenIDKey.Create().
-		SetKid(kid).
+		SetKid(kidStr).
 		SetPrivateKey(string(privateKeyPEM)).
 		SetPublicKey(string(publicKeyPEM)).
 		SetModulus(keyPair.Modulus).

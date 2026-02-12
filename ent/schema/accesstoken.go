@@ -22,7 +22,7 @@ func (AccessToken) Fields() []ent.Field {
 		field.String("scope").Optional().Nillable(),
 		field.String("token").Unique(),
 		field.String("client_id"),
-		field.String("user_id"),
+		field.UUID("user_id", uuid.Nil),
 	}
 }
 

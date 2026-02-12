@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"sso-server/src/utils"
 	"time"
 
 	"entgo.io/ent"
@@ -15,18 +16,19 @@ type OAuthFlow struct{ ent.Schema }
 
 func (OAuthFlow) Fields() []ent.Field {
 	return []ent.Field{
-		field.String("id").DefaultFunc(func() string { return uuid.NewString() }).Immutable(),
+		field.String("id").DefaultFunc(func() string { return utils.GenerateUUIDV7StringPanic() }).Immutable(),
 		field.Time("created_at").Default(time.Now).Immutable(),
 		field.Time("updated_at").Default(time.Now).UpdateDefault(time.Now),
 		field.String("client_state"),
 		field.String("client_id"),
-		field.String("user_id"),
+		field.UUID("user_id", uuid.Nil),
 		field.String("redirect_uri"),
 		field.String("scope"),
 		field.String("provider"),
 		field.Time("expires_at"),
 		field.String("code_challenge").Optional().Nillable(),
 		field.String("code_challenge_method").Optional().Nillable(),
+		field.String("nonce").Optional().Nillable(),
 	}
 }
 

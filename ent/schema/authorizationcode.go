@@ -21,11 +21,12 @@ func (AuthorizationCode) Fields() []ent.Field {
 		field.Time("expires_at"),
 		field.String("code").Unique(),
 		field.String("client_id"),
-		field.String("user_id"),
+		field.UUID("user_id", uuid.Nil),
 		field.String("redirect_uri"),
 		field.String("scope").Optional().Nillable(),
 		field.String("code_challenge").Optional().Nillable(),
 		field.String("code_challenge_method").Optional().Nillable(),
+		field.String("nonce").Optional().Nillable(),
 	}
 }
 

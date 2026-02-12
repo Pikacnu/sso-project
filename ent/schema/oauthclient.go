@@ -23,7 +23,7 @@ func (OAuthClient) Fields() []ent.Field {
 		field.String("redirect_uris"),
 		field.String("app_name").Optional().Nillable(),
 		field.String("allowed_scopes").Default("openid profile"),
-		field.String("owner_id").Optional().Nillable(),
+		field.UUID("owner_id", uuid.Nil).Optional().Nillable(),
 		field.Bool("is_active").Default(true),
 		field.String("logo_url").Optional().Nillable(),
 	}

@@ -21,7 +21,7 @@ func (Scope) Fields() []ent.Field {
 		field.String("client_id"),
 		field.String("key"),
 		field.String("data").Optional().Nillable().StorageKey("data"),
-		field.String("user_id").Optional().Nillable(),
+		field.UUID("user_id", uuid.Nil).Optional().Nillable(),
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"sso-server/src/middleware"
 	. "sso-server/src/route/api"
 	. "sso-server/src/route/auth"
+	. "sso-server/src/route/well_known"
 
 	"github.com/gin-gonic/gin"
 )
@@ -18,6 +19,7 @@ func StartWebServer() {
 	routes := []func(*gin.Engine){
 		RegisterAPIRoutes,
 		RegisterAuthRoutes,
+		RegistrerWellKnownRoutes,
 		RegisterRoutes,
 	}
 

@@ -12,11 +12,14 @@ import (
 	"sso-server/ent/generated/refreshtoken"
 	"sso-server/ent/generated/scope"
 	"sso-server/src/auth"
+	"sso-server/src/db"
 	. "sso-server/src/db"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 )
 
 func authorizeHandler(ctx *gin.Context) {
@@ -30,8 +33,11 @@ func authorizeHandler(ctx *gin.Context) {
 	codeChallenge := ctx.Query("code_challenge")
 	codeChallengeMethod := ctx.Query("code_challenge_method")
 
+	// OIDC nonce parameter for replay attack prevention
+	nonce := ctx.Query("nonce")
+
 	if clientId == "" || redirectUri == "" || scopeParam == "" || state == "" {
-		ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Missing required parameters"})
+		ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid_request", "error_description": "Missing required parameters"})
 		return
 	}
 
@@ -51,17 +57,17 @@ func authorizeHandler(ctx *gin.Context) {
 	oauthClientEnt, err := Client.OAuthClient.Query().Where(oauthclient.IDEQ(clientId)).Only(ctxBg)
 	if err != nil {
 		if ent.IsNotFound(err) {
-			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid client_id"})
+			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid_client", "error_description": "Invalid client_id"})
 			return
 		}
-		ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to query client"})
+		ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "server_error", "error_description": "Failed to query client"})
 		return
 	}
 
 	allowRedirectUri := strings.Split(oauthClientEnt.RedirectUris, ",")
 
 	if !slices.Contains(allowRedirectUri, redirectUri) {
-		ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid redirect_uri"})
+		ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid_request", "error_description": "Invalid redirect_uri"})
 		return
 	}
 
@@ -78,7 +84,7 @@ func authorizeHandler(ctx *gin.Context) {
 	}
 
 	if !isValidScope {
-		ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid scope"})
+		ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid_scope", "error_description": "One or more requested scopes are invalid"})
 		return
 	}
 
@@ -110,14 +116,18 @@ func authorizeHandler(ctx *gin.Context) {
 		return
 	}
 
-	// Prepare pointer values for optional PKCE fields
+	// Prepare pointer values for optional PKCE and OIDC fields
 	var ccPtr *string
 	var ccmPtr *string
+	var noncePtr *string
 	if codeChallenge != "" {
 		ccPtr = &codeChallenge
 	}
 	if codeChallengeMethod != "" {
 		ccmPtr = &codeChallengeMethod
+	}
+	if nonce != "" {
+		noncePtr = &nonce
 	}
 
 	// Persist OAuthFlow using Ent
@@ -131,6 +141,7 @@ func authorizeHandler(ctx *gin.Context) {
 		SetID(flowID).
 		SetNillableCodeChallenge(ccPtr).
 		SetNillableCodeChallengeMethod(ccmPtr).
+		SetNillableNonce(noncePtr).
 		Save(ctxBg)
 	if err != nil {
 		ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to create authorization code"})
@@ -206,6 +217,7 @@ func authCallbackHandler(ctx *gin.Context) {
 		SetExpiresAt(time.Now().Add(10 * time.Minute)).
 		SetNillableCodeChallenge(oauthFlowEnt.CodeChallenge).
 		SetNillableCodeChallengeMethod(oauthFlowEnt.CodeChallengeMethod).
+		SetNillableNonce(oauthFlowEnt.Nonce).
 		Save(ctxBg)
 	if err != nil {
 		ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to create authorization code"})
@@ -222,6 +234,18 @@ func tokenHandler(ctx *gin.Context) {
 		return
 	}
 	grantType := ctx.PostForm("grant_type")
+	sourceJWT := ctx.PostForm("source_token")
+
+	sourceJWTClaims, err := auth.ValidateJWT(sourceJWT)
+	if sourceJWT == "" || err != nil {
+		ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid or missing source_token"})
+		return
+	}
+
+	if grantType != "authorization_code" && grantType != "refresh_token" {
+		ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Unsupported grant_type"})
+		return
+	}
 
 	// Handle refresh token grant
 	if grantType == "refresh_token" {
@@ -279,8 +303,13 @@ func tokenHandler(ctx *gin.Context) {
 			ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to update refresh token"})
 			return
 		}
+
+		modifiedClaims := sourceJWTClaims
+		modifiedClaims.RegisteredClaims.ExpiresAt = jwt.NewNumericDate(atEnt.ExpiresAt)
+
 		ctx.JSON(http.StatusOK, gin.H{
 			"access_token":  atEnt.Token,
+			"id_token":      modifiedClaims, // Optional: include if using OpenID Connect
 			"token_type":    "Bearer",
 			"expires_in":    3600,
 			"refresh_token": rtEnt.Token,
@@ -323,10 +352,10 @@ func tokenHandler(ctx *gin.Context) {
 	clientEnt, err := Client.OAuthClient.Query().Where(oauthclient.IDEQ(clientID), oauthclient.SecretEQ(clientSecret)).Only(ctxBg)
 	if err != nil {
 		if ent.IsNotFound(err) {
-			ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid client credentials"})
+			ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid_client", "error_description": "Invalid client credentials"})
 			return
 		}
-		ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to query client"})
+		ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "server_error", "error_description": "Failed to query client"})
 		return
 	}
 
@@ -338,20 +367,20 @@ func tokenHandler(ctx *gin.Context) {
 	).Only(ctxBg)
 	if err != nil {
 		if ent.IsNotFound(err) {
-			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid or expired code"})
+			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid_grant", "error_description": "Invalid or expired authorization code"})
 			return
 		}
-		ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to query authorization code"})
+		ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "server_error", "error_description": "Failed to query authorization code"})
 		return
 	}
-	if authCodeEnt.UserID == "" {
-		ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid or expired code"})
+	if authCodeEnt.UserID == uuid.Nil {
+		ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid_grant", "error_description": "Invalid or expired authorization code"})
 		return
 	}
 
 	// Step 3: Verify redirect URI matches
 	if authCodeEnt.RedirectURI != redirectURI {
-		ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Redirect URI mismatch"})
+		ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid_grant", "error_description": "Redirect URI mismatch"})
 		return
 	}
 
@@ -359,7 +388,7 @@ func tokenHandler(ctx *gin.Context) {
 	if authCodeEnt.CodeChallenge != nil && *authCodeEnt.CodeChallenge != "" {
 		// If code_challenge was provided during authorize, code_verifier is required
 		if codeVerifier == "" {
-			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "code_verifier required for PKCE"})
+			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid_grant", "error_description": "code_verifier required for PKCE"})
 			return
 		}
 
@@ -371,7 +400,7 @@ func tokenHandler(ctx *gin.Context) {
 
 		// Verify the code_verifier against the code_challenge
 		if !auth.VerifyCodeChallenge(codeVerifier, *authCodeEnt.CodeChallenge, method) {
-			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid code_verifier"})
+			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid_grant", "error_description": "Invalid code_verifier"})
 			return
 		}
 	}
@@ -397,6 +426,7 @@ func tokenHandler(ctx *gin.Context) {
 		SetExpiresAt(time.Now().Add(1 * time.Hour)).
 		SetNillableScope(authCodeEnt.Scope).
 		Save(ctxBg)
+
 	if err != nil {
 		ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to create access token"})
 		return
@@ -411,6 +441,7 @@ func tokenHandler(ctx *gin.Context) {
 		SetNillableScope(authCodeEnt.Scope).
 		SetAccessTokenID(atEnt.ID).
 		Save(ctxBg)
+
 	if err != nil {
 		ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to create refresh token"})
 		return
@@ -423,9 +454,44 @@ func tokenHandler(ctx *gin.Context) {
 		return
 	}
 
-	// Step 9: Return tokens
+	// Step 9: Get user info for ID token (if implementing OpenID Connect)
+	userEnt, err := Client.User.Get(ctxBg, authCodeEnt.UserID)
+	if err != nil {
+		ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "server_error", "error_description": "Failed to query user"})
+		return
+	}
+
+	// Prepare user info for ID token generation
+	userJWTInfoWarp := db.UserJWTPayload{
+		ID:       userEnt.ID.String(),
+		Username: userEnt.Username,
+		Email:    userEnt.Email,
+		Avatar:   *userEnt.Avatar,
+	}
+
+	// Get issuer for ID token
+	protocol := "https"
+	if ctx.Request.TLS == nil {
+		protocol = "http"
+	}
+	issuer := protocol + "://" + ctx.Request.Host
+
+	// Get nonce from authorization code if present
+	nonceValue := ""
+	if authCodeEnt.Nonce != nil {
+		nonceValue = *authCodeEnt.Nonce
+	}
+
+	// Generate OIDC-compliant ID Token with RS256
+	idToken, err := auth.GenerateIDToken(userJWTInfoWarp, authCodeEnt.ClientID, nonceValue, time.Now(), issuer)
+	if err != nil {
+		ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "server_error", "error_description": "Failed to generate ID token"})
+		return
+	}
+
 	ctx.JSON(http.StatusOK, gin.H{
 		"access_token":  atEnt.Token,
+		"id_token":      idToken,
 		"token_type":    "Bearer",
 		"expires_in":    3600,
 		"refresh_token": rtEntCreated.Token,

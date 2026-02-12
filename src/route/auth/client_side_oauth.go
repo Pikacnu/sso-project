@@ -197,16 +197,13 @@ func callBackHandler(ctx *gin.Context) {
 		return
 	}
 
-	// Create server-side session with secure ID
-	sessionID, err := auth.GenerateSecureToken()
-	if err != nil {
-		ctx.AbortWithError(http.StatusInternalServerError, err)
-		return
-	}
+	// Create server-side session with secure UUID
+	sessionUUID := uuid.New()
+	sessionID := sessionUUID.String()
 
 	exp := time.Now().Add(time.Hour * 24 * 7) // 7 days
 	// Create session record in Ent
-	if _, err := dbpkg.Client.Session.Create().SetID(sessionID).SetUserID(userEnt.ID).SetUserAgent(ctx.GetHeader("User-Agent")).SetIPAddress(ctx.ClientIP()).SetExpiresAt(exp).Save(ctxBg); err != nil {
+	if _, err := dbpkg.Client.Session.Create().SetID(sessionUUID).SetUserID(userEnt.ID).SetUserAgent(ctx.GetHeader("User-Agent")).SetIPAddress(ctx.ClientIP()).SetExpiresAt(exp).Save(ctxBg); err != nil {
 		ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to create session"})
 		return
 	}
@@ -216,8 +213,8 @@ func callBackHandler(ctx *gin.Context) {
 	if userEnt.Avatar != nil {
 		avatarStr = *userEnt.Avatar
 	}
-	dbUser := dbpkg.UserJWTPayload{ID: userEnt.ID, Email: userEnt.Email, Username: userEnt.Username, Avatar: avatarStr}
-	dbSession := dbpkg.SessionJWTPayload{ID: sessionID, UserID: dbUser.ID, ExpiresAt: exp}
+	dbUser := dbpkg.UserJWTPayload{ID: userEnt.ID.String(), Email: userEnt.Email, Username: userEnt.Username, Avatar: avatarStr}
+	dbSession := dbpkg.SessionJWTPayload{ID: sessionID, UserID: userEnt.ID.String(), ExpiresAt: exp}
 	tokenString, err := auth.GenerateJWT(dbUser, dbSession)
 	if err != nil {
 		ctx.AbortWithError(http.StatusInternalServerError, err)
@@ -270,22 +267,46 @@ func getGoogleUser(client *http.Client) (*ReturnedDefaultUser, error) {
 }
 
 func logoutHandler(ctx *gin.Context) {
+	// OIDC end_session endpoint parameters
+	idTokenHint := ctx.Query("id_token_hint")
+	postLogoutRedirectURI := ctx.Query("post_logout_redirect_uri")
+	state := ctx.Query("state")
+
+	// Try to get session token from cookie (for browser-based logout)
 	tokenString, err := ctx.Cookie("session_token")
-	if err != nil {
+	if err != nil && idTokenHint == "" {
+		// No token provided, redirect to home
 		ctx.Redirect(http.StatusTemporaryRedirect, "/")
 		return
 	}
-	claims, err := auth.ValidateJWT(tokenString)
-	if err != nil {
-		ctx.Redirect(http.StatusTemporaryRedirect, "/")
+
+	// Validate token and revoke session
+	if tokenString != "" {
+		claims, err := auth.ValidateJWT(tokenString)
+		if err == nil {
+			sid := claims.Sid
+			if sid != "" {
+				// Parse string session ID to UUID
+				sessionUUID, err := uuid.Parse(sid)
+				if err == nil {
+					dbpkg.Client.Session.Update().Where(session.IDEQ(sessionUUID)).SetIsRevoked(true).Save(context.Background())
+				}
+			}
+		}
+		// Clear session cookie
+		ctx.SetCookie("session_token", "", -1, "/", "", false, true)
+	}
+
+	// OIDC-compliant redirect
+	if postLogoutRedirectURI != "" {
+		redirectURL := postLogoutRedirectURI
+		if state != "" {
+			redirectURL += "?state=" + state
+		}
+		ctx.Redirect(http.StatusTemporaryRedirect, redirectURL)
 		return
 	}
-	sid := claims.Sid
-	if sid == "" {
-		ctx.Redirect(http.StatusTemporaryRedirect, "/")
-		return
-	}
-	dbpkg.Client.Session.Update().Where(session.IDEQ(sid)).SetIsRevoked(true).Save(context.Background())
-	ctx.SetCookie("session_token", "", -1, "/", "", false, true)
+
+	// Default redirect to home
 	ctx.Redirect(http.StatusTemporaryRedirect, "/")
 }

@@ -49,6 +49,7 @@ type OpenIDConfiguration struct {
 	RequireRequestURIRegistration              bool     `json:"require_request_uri_registration,omitempty"`                 // OPTIONAL (default: false)
 	OPPolicyURI                                string   `json:"op_policy_uri,omitempty"`                                    // OPTIONAL
 	OPTosURI                                   string   `json:"op_tos_uri,omitempty"`                                       // OPTIONAL
+	EndSessionEndpoint                         string   `json:"end_session_endpoint,omitempty"`                             // OPTIONAL
 }
 
 func openidConfigurationHandler(ctx *gin.Context) {
@@ -57,14 +58,27 @@ func openidConfigurationHandler(ctx *gin.Context) {
 	tokenEndpoint := issuer + "/auth/token"
 	userInfoEndpoint := issuer + "/auth/userinfo"
 	jwksURI := issuer + "/.well-known/jwks.json"
-	scopesSupported := []string{"openid", "profile", "email"}
-	responseTypesSupported := []string{"code", "token", "id_token", "code token", "code id_token", "token id_token", "code token id_token"}
-	responseModesSupported := []string{"query", "fragment", "form_post"}
-	grantTypesSupported := []string{"authorization_code", "refresh_token", "password", "client_credentials"}
+	endSessionEndpoint := issuer + "/auth/logout"
+
+	// Only list actually implemented features
+	scopesSupported := []string{"openid", "profile", "email", "offline_access"}
+	responseTypesSupported := []string{"code"}  // Only Authorization Code Flow is implemented
+	responseModesSupported := []string{"query"} // Only query parameter mode is implemented
+	grantTypesSupported := []string{"authorization_code", "refresh_token"}
 	subjectTypesSupported := []string{"public"}
 	idTokenSigningAlgValuesSupported := []string{"RS256"}
-	tokenEndpointAuthMethodsSupported := []string{"client_secret_basic", "client_secret_post", "client_secret_jwt", "private_key_jwt"}
-	claimsSupported := []string{"sub", "name", "email"}
+	tokenEndpointAuthMethodsSupported := []string{"client_secret_post"}
+	codeChallengeMethodsSupported := []string{"S256", "plain"}
+
+	// Only list actually implemented claims
+	claimsSupported := []string{
+		// Standard JWT claims
+		"sub", "iss", "aud", "exp", "iat",
+		// OIDC specific claims
+		"auth_time", "nonce",
+		// Profile claims (actually implemented)
+		"name", "email", "email_verified", "picture", "preferred_username",
+	}
 
 	config := OpenIDConfiguration{
 		Issuer:                            issuer,
@@ -80,8 +94,21 @@ func openidConfigurationHandler(ctx *gin.Context) {
 		TokenEndpointAuthMethodsSupported: tokenEndpointAuthMethodsSupported,
 		ClaimsSupported:                   claimsSupported,
 		ScopesSupported:                   scopesSupported,
+		EndSessionEndpoint:                endSessionEndpoint,
 	}
-	ctx.JSON(200, config)
+
+	// Add code_challenge_methods_supported (PKCE)
+	type ExtendedConfig struct {
+		OpenIDConfiguration
+		CodeChallengeMethodsSupported []string `json:"code_challenge_methods_supported"`
+	}
+
+	extendedConfig := ExtendedConfig{
+		OpenIDConfiguration:           config,
+		CodeChallengeMethodsSupported: codeChallengeMethodsSupported,
+	}
+
+	ctx.JSON(200, extendedConfig)
 }
 
 type JWKS struct {

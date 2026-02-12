@@ -13,13 +13,18 @@ import (
 )
 
 var cfg = config.NewEnvFromEnv()
-var ParseOption = jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()})
+var ParseOption = jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg(), jwt.SigningMethodRS256.Alg()})
 var TokenExpireOption = jwt.WithExpirationRequired()
 
 func AuthorizeKeyFunc(token *jwt.Token) (any, error) {
 	switch token.Method.Alg() {
 	case jwt.SigningMethodHS256.Alg():
 		return []byte(cfg.JWTSecret), nil
+	case jwt.SigningMethodRS256.Alg():
+		if currentKeyPair != nil && currentKeyPair.PublicKey != nil {
+			return currentKeyPair.PublicKey, nil
+		}
+		return nil, jwt.ErrTokenUnverifiable
 	default:
 		return nil, jwt.ErrTokenUnverifiable
 	}
@@ -34,6 +39,50 @@ type CustomClaims struct {
 	jwt.RegisteredClaims
 }
 
+// IDTokenClaims represents OIDC-compliant ID Token claims
+type IDTokenClaims struct {
+	// Required OIDC claims
+	Sub string `json:"sub"` // Subject (user unique ID)
+	Aud string `json:"aud"` // Audience (client ID)
+
+	// Optional OIDC claims
+	Nonce    string   `json:"nonce,omitempty"`     // Nonce for replay attack prevention
+	AuthTime int64    `json:"auth_time,omitempty"` // Time when authentication occurred
+	Acr      string   `json:"acr,omitempty"`       // Authentication Context Class Reference
+	Amr      []string `json:"amr,omitempty"`       // Authentication Methods References
+	Azp      string   `json:"azp,omitempty"`       // Authorized party
+
+	// Profile scope claims
+	Name              string `json:"name,omitempty"`
+	GivenName         string `json:"given_name,omitempty"`
+	FamilyName        string `json:"family_name,omitempty"`
+	MiddleName        string `json:"middle_name,omitempty"`
+	Nickname          string `json:"nickname,omitempty"`
+	PreferredUsername string `json:"preferred_username,omitempty"`
+	Profile           string `json:"profile,omitempty"`
+	Picture           string `json:"picture,omitempty"`
+	Website           string `json:"website,omitempty"`
+	Gender            string `json:"gender,omitempty"`
+	Birthdate         string `json:"birthdate,omitempty"`
+	Zoneinfo          string `json:"zoneinfo,omitempty"`
+	Locale            string `json:"locale,omitempty"`
+	UpdatedAt         int64  `json:"updated_at,omitempty"`
+
+	// Email scope claims
+	Email         string `json:"email,omitempty"`
+	EmailVerified bool   `json:"email_verified,omitempty"`
+
+	// Phone scope claims
+	PhoneNumber         string `json:"phone_number,omitempty"`
+	PhoneNumberVerified bool   `json:"phone_number_verified,omitempty"`
+
+	// Session ID
+	Sid string `json:"sid,omitempty"`
+
+	jwt.RegisteredClaims
+}
+
+// GenerateJWT generates a JWT using HS256 (for internal use, backward compatibility)
 func GenerateJWT(user db.UserJWTPayload, session db.SessionJWTPayload) (string, error) {
 	claims := CustomClaims{
 		Sub:    user.ID,
@@ -47,7 +96,42 @@ func GenerateJWT(user db.UserJWTPayload, session db.SessionJWTPayload) (string, 
 		},
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	token.Header["kid"] = currentKeyPair.Kid
 	return token.SignedString([]byte(cfg.JWTSecret))
+}
+
+// GenerateIDToken generates an OIDC-compliant ID Token using RS256
+func GenerateIDToken(user db.UserJWTPayload, clientID string, nonce string, authTime time.Time, issuer string) (string, error) {
+	if currentKeyPair == nil || currentKeyPair.PrivateKey == nil {
+		return "", errors.New("RSA key pair not initialized")
+	}
+
+	now := time.Now()
+	expiresAt := now.Add(1 * time.Hour)
+
+	claims := IDTokenClaims{
+		Sub:               user.ID,
+		Aud:               clientID,
+		Nonce:             nonce,
+		AuthTime:          authTime.Unix(),
+		Name:              user.Username,
+		Email:             user.Email,
+		EmailVerified:     true, // TODO: implement email verification
+		Picture:           user.Avatar,
+		PreferredUsername: user.Username,
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    issuer,
+			Subject:   user.ID,
+			Audience:  jwt.ClaimStrings{clientID},
+			ExpiresAt: jwt.NewNumericDate(expiresAt),
+			IssuedAt:  jwt.NewNumericDate(now),
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+	token.Header["kid"] = currentKeyPair.Kid
+
+	return token.SignedString(currentKeyPair.PrivateKey)
 }
 
 func ValidateJWT(tokenString string) (CustomClaims, error) {

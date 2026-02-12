@@ -8,6 +8,7 @@ import (
 	dbpkg "sso-server/src/db"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 func RegisterAPIRoutes(router *gin.Engine) {
@@ -21,8 +22,15 @@ func GetUserData(c *gin.Context) {
 	sessionID := c.MustGet("session_id").(string)
 	ctxBg := context.Background()
 
+	// Parse session ID to UUID
+	sessionUUID, err := uuid.Parse(sessionID)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid session ID"})
+		return
+	}
+
 	// Load session by ID to get user_id
-	sessionEnt, err := dbpkg.Client.Session.Query().Where(session.IDEQ(sessionID)).Only(ctxBg)
+	sessionEnt, err := dbpkg.Client.Session.Query().Where(session.IDEQ(sessionUUID)).Only(ctxBg)
 	if err != nil {
 		if ent.IsNotFound(err) {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Session not found"})
