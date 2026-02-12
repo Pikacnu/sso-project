@@ -483,10 +483,10 @@ func tokenHandler(ctx *gin.Context) {
 		avatar = *userEnt.Avatar
 	}
 	userJWTInfoWarp := db.UserJWTPayload{
-		ID:       userEnt.ID.String(),
-		Username: userEnt.Username,
-		Email:    userEnt.Email,
-		Avatar:   avatar,
+		ID:            userEnt.ID.String(),
+		Username:      userEnt.Username,
+		Email:         userEnt.Email,
+		Avatar:        avatar,
 		EmailVerified: userEnt.EmailVerified,
 	}
 

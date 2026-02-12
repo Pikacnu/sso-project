@@ -16,10 +16,10 @@ var cfg = config.NewEnvFromEnv()
 
 // UserJWTPayload holds minimal user data for JWT generation
 type UserJWTPayload struct {
-	ID       string
-	Email    string
-	Username string
-	Avatar   string
+	ID            string
+	Email         string
+	Username      string
+	Avatar        string
 	EmailVerified bool
 }
 

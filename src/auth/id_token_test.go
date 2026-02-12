@@ -31,10 +31,10 @@ func TestGenerateIDToken_RS256Claims(t *testing.T) {
 	}()
 
 	user := db.UserJWTPayload{
-		ID:       "user-123",
-		Email:    "user@example.com",
-		Username: "testuser",
-		Avatar:   "https://example.com/avatar.png",
+		ID:            "user-123",
+		Email:         "user@example.com",
+		Username:      "testuser",
+		Avatar:        "https://example.com/avatar.png",
 		EmailVerified: true,
 	}
 
