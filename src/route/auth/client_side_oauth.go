@@ -22,6 +22,14 @@ import (
 	"google.golang.org/api/people/v1"
 )
 
+// @Summary OAuth login
+// @Tags auth
+// @Produce json
+// @Param platform path string true "OAuth provider (discord or google)"
+// @Param redirect_url query string false "Redirect URL after login"
+// @Success 302 {string} string "Redirect"
+// @Failure 400 {object} OAuthErrorResponse
+// @Router /auth/{platform}/login [get]
 func loginHandler(ctx *gin.Context) {
 	var uriBinding OAuthUriBinding
 	if err := ctx.ShouldBindUri(&uriBinding); err != nil {
@@ -51,6 +59,17 @@ func loginHandler(ctx *gin.Context) {
 	ctx.Redirect(http.StatusTemporaryRedirect, url)
 }
 
+// @Summary OAuth callback
+// @Tags auth
+// @Produce json
+// @Param platform path string true "OAuth provider (discord or google)"
+// @Param code query string true "Authorization code"
+// @Param state query string true "CSRF state"
+// @Success 302 {string} string "Redirect"
+// @Failure 400 {object} OAuthErrorResponse
+// @Failure 403 {object} OAuthErrorResponse
+// @Failure 500 {object} OAuthErrorResponse
+// @Router /auth/{platform}/callback [get]
 func callBackHandler(ctx *gin.Context) {
 	var uriBinding OAuthUriBinding
 	if err := ctx.ShouldBindUri(&uriBinding); err != nil {
@@ -273,6 +292,14 @@ func getGoogleUser(client *http.Client) (*ReturnedDefaultUser, error) {
 	return &googleUser, nil
 }
 
+// @Summary Logout
+// @Tags auth
+// @Produce json
+// @Param id_token_hint query string false "ID token hint"
+// @Param post_logout_redirect_uri query string false "Post logout redirect URI"
+// @Param state query string false "State"
+// @Success 302 {string} string "Redirect"
+// @Router /auth/logout [get]
 func logoutHandler(ctx *gin.Context) {
 	// OIDC end_session endpoint parameters
 	idTokenHint := ctx.Query("id_token_hint")

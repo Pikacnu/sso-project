@@ -345,6 +345,72 @@ paths:
       summary: OpenID configuration
       tags:
       - well-known
+  /auth/{platform}/callback:
+    get:
+      parameters:
+      - description: OAuth provider (discord or google)
+        in: path
+        name: platform
+        required: true
+        type: string
+      - description: Authorization code
+        in: query
+        name: code
+        required: true
+        type: string
+      - description: CSRF state
+        in: query
+        name: state
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "302":
+          description: Redirect
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/auth.OAuthErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/auth.OAuthErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/auth.OAuthErrorResponse'
+      summary: OAuth callback
+      tags:
+      - auth
+  /auth/{platform}/login:
+    get:
+      parameters:
+      - description: OAuth provider (discord or google)
+        in: path
+        name: platform
+        required: true
+        type: string
+      - description: Redirect URL after login
+        in: query
+        name: redirect_url
+        type: string
+      produces:
+      - application/json
+      responses:
+        "302":
+          description: Redirect
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/auth.OAuthErrorResponse'
+      summary: OAuth login
+      tags:
+      - auth
   /auth/authorize:
     get:
       parameters:
@@ -402,6 +468,37 @@ paths:
       summary: Authorize
       tags:
       - auth
+  /auth/callback:
+    get:
+      parameters:
+      - description: OAuth flow ID
+        in: query
+        name: code
+        required: true
+        type: string
+      - description: State
+        in: query
+        name: state
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "302":
+          description: Redirect
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/auth.OAuthErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/auth.OAuthErrorResponse'
+      summary: OAuth authorize callback
+      tags:
+      - auth
   /auth/introspect:
     post:
       consumes:
@@ -428,6 +525,58 @@ paths:
           schema:
             $ref: '#/definitions/auth.OAuthErrorResponse'
       summary: Introspect token
+      tags:
+      - auth
+  /auth/login:
+    get:
+      parameters:
+      - description: Authorization code
+        in: query
+        name: code
+        required: true
+        type: string
+      - description: State
+        in: query
+        name: state
+        required: true
+        type: string
+      produces:
+      - text/html
+      responses:
+        "200":
+          description: HTML
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/auth.OAuthErrorResponse'
+      summary: Login page
+      tags:
+      - auth
+  /auth/logout:
+    get:
+      parameters:
+      - description: ID token hint
+        in: query
+        name: id_token_hint
+        type: string
+      - description: Post logout redirect URI
+        in: query
+        name: post_logout_redirect_uri
+        type: string
+      - description: State
+        in: query
+        name: state
+        type: string
+      produces:
+      - application/json
+      responses:
+        "302":
+          description: Redirect
+          schema:
+            type: string
+      summary: Logout
       tags:
       - auth
   /auth/revoke:

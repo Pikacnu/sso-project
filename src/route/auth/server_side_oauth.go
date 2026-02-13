@@ -200,6 +200,14 @@ func authorizeHandler(ctx *gin.Context) {
 	ctx.Redirect(http.StatusTemporaryRedirect, redirectURL)
 }
 
+// @Summary Login page
+// @Tags auth
+// @Produce html
+// @Param code query string true "Authorization code"
+// @Param state query string true "State"
+// @Success 200 {string} string "HTML"
+// @Failure 400 {object} OAuthErrorResponse
+// @Router /auth/login [get]
 func loginPageHandler(ctx *gin.Context) {
 	code := ctx.Query("code")
 	state := ctx.Query("state")
@@ -215,6 +223,15 @@ func loginPageHandler(ctx *gin.Context) {
 	})
 }
 
+// @Summary OAuth authorize callback
+// @Tags auth
+// @Produce json
+// @Param code query string true "OAuth flow ID"
+// @Param state query string true "State"
+// @Success 302 {string} string "Redirect"
+// @Failure 400 {object} OAuthErrorResponse
+// @Failure 500 {object} OAuthErrorResponse
+// @Router /auth/callback [get]
 func authCallbackHandler(ctx *gin.Context) {
 	code := ctx.Query("code")
 	state := ctx.Query("state")
