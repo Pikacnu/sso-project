@@ -20,17 +20,18 @@ import (
 func StartWebServer() {
 	// load configuration
 
+	// All route registration functions
 	routes := []func(*gin.Engine){
 		RegisterAPIRoutes,
 		RegisterAuthRoutes,
 		RegisterScopeRoutes,
-		RegistrerWellKnownRoutes,
 		RegisterRoutes,
+		RegistrerWellKnownRoutes,
 	}
 
-	cfg := config.NewEnvFromEnv()
-	if cfg.Debug == true {
-		fmt.Println("Config:\n", cfg.Format())
+	// load Config
+	if config.SystemEnv.Debug == true {
+		fmt.Println("Config:\n", config.SystemEnv.Format())
 	}
 
 	router := gin.Default()
@@ -40,12 +41,6 @@ func StartWebServer() {
 	docs.SwaggerInfo.Version = "1.0"
 	docs.SwaggerInfo.BasePath = "/"
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
-
-	router.GET("/", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"message": "Hello, World!",
-		})
-	})
 
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
@@ -57,5 +52,5 @@ func StartWebServer() {
 		register(router)
 	}
 
-	router.Run(cfg.BindAddr())
+	router.Run(config.SystemEnv.BindAddr())
 }

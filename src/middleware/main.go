@@ -20,11 +20,27 @@ var ProtectedPaths = []string{
 	"/user/",
 }
 
+var PublicPaths = []string{
+	"/login",
+	"/signup",
+	"/.well-known/",
+	"/swagger/",
+}
+
+func IsPublicPath(path string) bool {
+	for _, publicPath := range PublicPaths {
+		if strings.HasPrefix(path, publicPath) {
+			return true
+		}
+	}
+	return false
+}
+
 func RegistryMiddleware(router *gin.Engine) {
 	middlewares := []gin.HandlerFunc{
 		gin.Logger(),
 		gin.Recovery(),
-		ConfigMiddleware(),
+		//ConfigMiddleware(),
 		SessionMiddleware(),
 		ClientMiddleware(),
 	}
@@ -34,6 +50,11 @@ func RegistryMiddleware(router *gin.Engine) {
 func SessionMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		urlPath := c.Request.URL.Path
+
+		if IsPublicPath(urlPath) {
+			c.Next()
+			return
+		}
 
 		isProtected := false
 		for _, protectedPath := range ProtectedPaths {
@@ -108,7 +129,8 @@ func SessionMiddleware() gin.HandlerFunc {
 func ClientMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		urlPath := c.Request.URL.Path
-		if strings.HasPrefix(urlPath, "/swagger/") {
+
+		if IsPublicPath(urlPath) {
 			c.Next()
 			return
 		}
