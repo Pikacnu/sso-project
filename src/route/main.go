@@ -25,7 +25,6 @@ func StartWebServer() {
 		RegisterAPIRoutes,
 		RegisterAuthRoutes,
 		RegisterScopeRoutes,
-		RegisterRoutes,
 		RegistrerWellKnownRoutes,
 	}
 
