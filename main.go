@@ -1,3 +1,8 @@
+//go:generate swag init -g main.go -o docs
+// @title SSO API
+// @version 1.0
+// @description SSO server API
+// @BasePath /
 package main
 
 import (

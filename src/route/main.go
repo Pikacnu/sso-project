@@ -4,13 +4,17 @@ import (
 	"fmt"
 	"net/http"
 
+	"sso-server/docs"
 	"sso-server/src/config"
 	"sso-server/src/middleware"
 	. "sso-server/src/route/api"
 	. "sso-server/src/route/auth"
+	. "sso-server/src/route/scopes"
 	. "sso-server/src/route/well_known"
 
 	"github.com/gin-gonic/gin"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
 func StartWebServer() {
@@ -19,6 +23,7 @@ func StartWebServer() {
 	routes := []func(*gin.Engine){
 		RegisterAPIRoutes,
 		RegisterAuthRoutes,
+		RegisterScopeRoutes,
 		RegistrerWellKnownRoutes,
 		RegisterRoutes,
 	}
@@ -30,6 +35,11 @@ func StartWebServer() {
 
 	router := gin.Default()
 	middleware.RegistryMiddleware(router)
+
+	docs.SwaggerInfo.Title = "SSO API"
+	docs.SwaggerInfo.Version = "1.0"
+	docs.SwaggerInfo.BasePath = "/"
+	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	router.GET("/", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{

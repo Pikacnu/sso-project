@@ -1,0 +1,440 @@
+basePath: /
+definitions:
+  auth.ErrorResponse:
+    properties:
+      error:
+        type: string
+    type: object
+  auth.ExternalError:
+    properties:
+      details:
+        items:
+          $ref: '#/definitions/external.SchemaError'
+        type: array
+      error:
+        type: string
+      message:
+        type: string
+      scope:
+        type: string
+    type: object
+  auth.IntrospectResponse:
+    properties:
+      active:
+        type: boolean
+      client_id:
+        type: string
+      exp:
+        type: integer
+      scope:
+        type: string
+      username:
+        type: string
+    type: object
+  auth.OAuthErrorResponse:
+    properties:
+      error:
+        type: string
+      error_description:
+        type: string
+    type: object
+  auth.TokenResponse:
+    properties:
+      access_token:
+        type: string
+      expires_in:
+        type: integer
+      id_token: {}
+      refresh_token:
+        type: string
+      scope:
+        type: string
+      token_type:
+        type: string
+    type: object
+  auth.UserInfoResponse:
+    properties:
+      _errors:
+        items:
+          $ref: '#/definitions/auth.ExternalError'
+        type: array
+      email:
+        type: string
+      email_verified:
+        type: boolean
+      exp: {}
+      sub:
+        type: string
+    type: object
+  external.SchemaError:
+    properties:
+      actual:
+        type: string
+      expected:
+        type: string
+      field:
+        type: string
+    type: object
+  scopes.ScopeRegisterRequest:
+    properties:
+      auth_secret_env:
+        type: string
+      auth_type:
+        type: string
+      data:
+        type: string
+      external_endpoint:
+        type: string
+      external_method:
+        type: string
+      is_external:
+        type: boolean
+      json_schema:
+        additionalProperties: {}
+        type: object
+      scope:
+        type: string
+    type: object
+  scopes.ScopeResponse:
+    properties:
+      auth_secret_env:
+        type: string
+      auth_type:
+        type: string
+      client_id:
+        type: string
+      created_at:
+        type: string
+      data:
+        type: string
+      external_endpoint:
+        type: string
+      external_method:
+        type: string
+      id:
+        type: string
+      is_external:
+        type: boolean
+      json_schema:
+        type: string
+      key:
+        type: string
+    type: object
+info:
+  contact: {}
+  description: SSO server API
+  title: SSO API
+  version: "1.0"
+paths:
+  /auth/authorize:
+    get:
+      parameters:
+      - description: Client ID
+        in: query
+        name: client_id
+        required: true
+        type: string
+      - description: Redirect URI
+        in: query
+        name: redirect_uri
+        required: true
+        type: string
+      - description: Scopes (comma-separated)
+        in: query
+        name: scope
+        required: true
+        type: string
+      - description: State
+        in: query
+        name: state
+        required: true
+        type: string
+      - description: Provider
+        in: query
+        name: provider
+        type: string
+      - description: PKCE code challenge
+        in: query
+        name: code_challenge
+        type: string
+      - description: PKCE method (plain or S256)
+        in: query
+        name: code_challenge_method
+        type: string
+      - description: OIDC nonce
+        in: query
+        name: nonce
+        type: string
+      produces:
+      - application/json
+      responses:
+        "302":
+          description: Redirect
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/auth.OAuthErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/auth.OAuthErrorResponse'
+      summary: Authorize
+      tags:
+      - auth
+  /auth/introspect:
+    post:
+      consumes:
+      - application/x-www-form-urlencoded
+      parameters:
+      - description: Token
+        in: formData
+        name: token
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/auth.IntrospectResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/auth.OAuthErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/auth.OAuthErrorResponse'
+      summary: Introspect token
+      tags:
+      - auth
+  /auth/revoke:
+    post:
+      consumes:
+      - application/x-www-form-urlencoded
+      parameters:
+      - description: Token
+        in: formData
+        name: token
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/auth.OAuthErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/auth.OAuthErrorResponse'
+      summary: Revoke token
+      tags:
+      - auth
+  /auth/token:
+    post:
+      consumes:
+      - application/x-www-form-urlencoded
+      parameters:
+      - description: authorization_code or refresh_token
+        in: formData
+        name: grant_type
+        required: true
+        type: string
+      - description: Source JWT
+        in: formData
+        name: source_token
+        required: true
+        type: string
+      - description: Authorization code
+        in: formData
+        name: code
+        type: string
+      - description: Client ID
+        in: formData
+        name: client_id
+        type: string
+      - description: Client secret
+        in: formData
+        name: client_secret
+        type: string
+      - description: Redirect URI
+        in: formData
+        name: redirect_uri
+        type: string
+      - description: PKCE code verifier
+        in: formData
+        name: code_verifier
+        type: string
+      - description: Refresh token
+        in: formData
+        name: refresh_token
+        type: string
+      - description: Scopes (comma-separated)
+        in: formData
+        name: scope
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/auth.TokenResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/auth.OAuthErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/auth.OAuthErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/auth.OAuthErrorResponse'
+      summary: Token
+      tags:
+      - auth
+  /auth/userinfo:
+    get:
+      parameters:
+      - description: Bearer access token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/auth.UserInfoResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/auth.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/auth.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/auth.ErrorResponse'
+      summary: User info
+      tags:
+      - auth
+  /scopes:
+    get:
+      parameters:
+      - description: Client secret
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Client UUID
+        in: header
+        name: X-Client-ID
+        required: true
+        type: string
+      - description: Client UUID
+        in: query
+        name: client_id
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/scopes.ScopeResponse'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: List scopes
+      tags:
+      - scopes
+  /scopes/register:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Client secret
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Client UUID
+        in: header
+        name: X-Client-ID
+        required: true
+        type: string
+      - description: Scope registration
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/scopes.ScopeRegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/scopes.ScopeResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Register scope
+      tags:
+      - scopes
+swagger: "2.0"

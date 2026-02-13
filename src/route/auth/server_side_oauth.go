@@ -22,6 +22,43 @@ import (
 	"github.com/google/uuid"
 )
 
+type OAuthErrorResponse struct {
+	Error            string `json:"error"`
+	ErrorDescription string `json:"error_description,omitempty"`
+}
+
+type TokenResponse struct {
+	AccessToken  string  `json:"access_token"`
+	IDToken      any     `json:"id_token,omitempty"`
+	TokenType    string  `json:"token_type"`
+	ExpiresIn    int     `json:"expires_in"`
+	RefreshToken string  `json:"refresh_token,omitempty"`
+	Scope        *string `json:"scope,omitempty"`
+}
+
+type IntrospectResponse struct {
+	Active   bool    `json:"active"`
+	ClientID string  `json:"client_id,omitempty"`
+	Username string  `json:"username,omitempty"`
+	Scope    *string `json:"scope,omitempty"`
+	Exp      int64   `json:"exp,omitempty"`
+}
+
+// @Summary Authorize
+// @Tags auth
+// @Produce json
+// @Param client_id query string true "Client ID"
+// @Param redirect_uri query string true "Redirect URI"
+// @Param scope query string true "Scopes (comma-separated)"
+// @Param state query string true "State"
+// @Param provider query string false "Provider"
+// @Param code_challenge query string false "PKCE code challenge"
+// @Param code_challenge_method query string false "PKCE method (plain or S256)"
+// @Param nonce query string false "OIDC nonce"
+// @Success 302 {string} string "Redirect"
+// @Failure 400 {object} OAuthErrorResponse
+// @Failure 500 {object} OAuthErrorResponse
+// @Router /auth/authorize [get]
 func authorizeHandler(ctx *gin.Context) {
 	clientId := ctx.Query("client_id")
 	redirectUri := ctx.Query("redirect_uri")
@@ -238,6 +275,24 @@ func authCallbackHandler(ctx *gin.Context) {
 	ctx.Redirect(http.StatusTemporaryRedirect, redirectURL)
 }
 
+// @Summary Token
+// @Tags auth
+// @Accept application/x-www-form-urlencoded
+// @Produce json
+// @Param grant_type formData string true "authorization_code or refresh_token"
+// @Param source_token formData string true "Source JWT"
+// @Param code formData string false "Authorization code"
+// @Param client_id formData string false "Client ID"
+// @Param client_secret formData string false "Client secret"
+// @Param redirect_uri formData string false "Redirect URI"
+// @Param code_verifier formData string false "PKCE code verifier"
+// @Param refresh_token formData string false "Refresh token"
+// @Param scope formData string false "Scopes (comma-separated)"
+// @Success 200 {object} TokenResponse
+// @Failure 400 {object} OAuthErrorResponse
+// @Failure 401 {object} OAuthErrorResponse
+// @Failure 500 {object} OAuthErrorResponse
+// @Router /auth/token [post]
 func tokenHandler(ctx *gin.Context) {
 	contentType := ctx.GetHeader("Content-Type")
 	if !strings.HasPrefix(contentType, "application/x-www-form-urlencoded") {
@@ -521,6 +576,15 @@ func tokenHandler(ctx *gin.Context) {
 
 }
 
+// @Summary Introspect token
+// @Tags auth
+// @Accept application/x-www-form-urlencoded
+// @Produce json
+// @Param token formData string true "Token"
+// @Success 200 {object} IntrospectResponse
+// @Failure 400 {object} OAuthErrorResponse
+// @Failure 500 {object} OAuthErrorResponse
+// @Router /auth/introspect [post]
 func introspectHandler(ctx *gin.Context) {
 	token := ctx.PostForm("token")
 	if token == "" {
@@ -547,6 +611,15 @@ func introspectHandler(ctx *gin.Context) {
 	})
 }
 
+// @Summary Revoke token
+// @Tags auth
+// @Accept application/x-www-form-urlencoded
+// @Produce json
+// @Param token formData string true "Token"
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} OAuthErrorResponse
+// @Failure 500 {object} OAuthErrorResponse
+// @Router /auth/revoke [post]
 func revokeHandler(ctx *gin.Context) {
 	token := ctx.PostForm("token")
 	if token == "" {

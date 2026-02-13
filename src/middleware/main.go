@@ -107,6 +107,12 @@ func SessionMiddleware() gin.HandlerFunc {
 
 func ClientMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		urlPath := c.Request.URL.Path
+		if strings.HasPrefix(urlPath, "/swagger/") {
+			c.Next()
+			return
+		}
+
 		secret := c.GetHeader("Authorization")
 		clientID := c.GetHeader("X-Client-ID")
 

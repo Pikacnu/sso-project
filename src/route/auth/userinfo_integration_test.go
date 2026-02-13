@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -49,7 +50,7 @@ func openTestDB(t *testing.T) *ent.Client {
 	return client
 }
 
-func seedUserInfoData(t *testing.T, client *ent.Client, tokenString string, scope string, emailVerified bool) {
+func seedUserInfoData(t *testing.T, client *ent.Client, tokenString string, scope string, emailVerified bool) (uuid.UUID, uuid.UUID) {
 	t.Helper()
 	ctx := context.Background()
 	cleanDB(ctx, client)
@@ -85,6 +86,8 @@ func seedUserInfoData(t *testing.T, client *ent.Client, tokenString string, scop
 	if err != nil {
 		t.Fatalf("failed to create access token: %v", err)
 	}
+
+	return userEnt.ID, clientEnt.ID
 }
 
 func newHS256Token(t *testing.T, userID string, email string) string {
@@ -227,5 +230,74 @@ func TestUserInfoHandler_MissingScopeToken(t *testing.T) {
 	}
 	if !strings.Contains(w.Body.String(), "Insufficient scope") {
 		t.Fatalf("unexpected response: %s", w.Body.String())
+	}
+}
+
+func TestUserInfoHandler_ExternalScopeSuccess(t *testing.T) {
+	client := openTestDB(t)
+	defer client.Close()
+	_db := db.Client
+	db.Client = client
+	defer func() { db.Client = _db }()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-API-Key") != "test-key" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"level": 42, "vip_status": true}`))
+	}))
+	defer server.Close()
+
+	if err := os.Setenv("GAME_API_KEY", "test-key"); err != nil {
+		t.Fatalf("failed to set env: %v", err)
+	}
+	defer os.Unsetenv("GAME_API_KEY")
+
+	jwtString := newHS256Token(t, "user-123", "user@example.com")
+	_, clientID := seedUserInfoData(t, client, jwtString, "sso.profile,game_stats", true)
+
+	ctx := context.Background()
+	_, err := client.Scope.Create().
+		SetClientID(clientID).
+		SetKey("game_stats").
+		SetIsExternal(true).
+		SetExternalEndpoint(server.URL + "/user/{user_id}").
+		SetExternalMethod("GET").
+		SetAuthType("API_KEY").
+		SetAuthSecretEnv("GAME_API_KEY").
+		SetJSONSchema(`{"level":{"type":"integer"},"vip_status":{"type":"boolean"}}`).
+		Save(ctx)
+	if err != nil {
+		t.Fatalf("failed to create external scope: %v", err)
+	}
+
+	r := setupRouter()
+	r.GET("/auth/userinfo", userInfoHandler)
+
+	w := performUserInfoRequest(r, jwtString)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", w.Code)
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+
+	if _, ok := payload["_errors"]; ok {
+		t.Fatalf("unexpected _errors: %v", payload["_errors"])
+	}
+
+	statsRaw, ok := payload["game_stats"].(map[string]any)
+	if !ok {
+		t.Fatalf("missing game_stats in response")
+	}
+	if statsRaw["level"] != float64(42) {
+		t.Fatalf("unexpected level: %v", statsRaw["level"])
+	}
+	if statsRaw["vip_status"] != true {
+		t.Fatalf("unexpected vip_status: %v", statsRaw["vip_status"])
 	}
 }
