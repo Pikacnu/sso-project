@@ -27,6 +27,19 @@ type emailVerificationRequest struct {
 	Email string `json:"email" form:"email" binding:"required"`
 }
 
+type emailVerificationResponse struct {
+	Message string `json:"message"`
+}
+
+// @Summary Request email verification
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param body body emailVerificationRequest true "Email verification request"
+// @Success 200 {object} emailVerificationResponse
+// @Failure 400 {object} OAuthErrorResponse
+// @Failure 500 {object} OAuthErrorResponse
+// @Router /auth/verify-email/request [post]
 func requestEmailVerificationHandler(ctx *gin.Context) {
 	var req emailVerificationRequest
 	if err := ctx.ShouldBind(&req); err != nil {
@@ -68,6 +81,14 @@ func requestEmailVerificationHandler(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, gin.H{"message": "Verification email sent"})
 }
 
+// @Summary Verify email
+// @Tags auth
+// @Produce json
+// @Param token query string true "Verification token"
+// @Success 200 {object} emailVerificationResponse
+// @Failure 400 {object} OAuthErrorResponse
+// @Failure 500 {object} OAuthErrorResponse
+// @Router /auth/verify-email [get]
 func verifyEmailHandler(ctx *gin.Context) {
 	token := ctx.Query("token")
 	if token == "" {

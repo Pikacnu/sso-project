@@ -1,8 +1,9 @@
-//go:generate swag init -g main.go -o docs
 // @title SSO API
 // @version 1.0
 // @description SSO server API
 // @BasePath /
+//
+//go:generate swag init -g main.go -o docs
 package main
 
 import (
@@ -19,10 +20,10 @@ import (
 func main() {
 	// Load config from environment variables
 	SystemEnv := config.NewEnvFromEnv()
-	// Initialize RSA keys for OpenID Connect
-	auth.InitKey()
 	// init DB Connection
 	db.InitDB()
+	// Initialize RSA keys for OpenID Connect
+	auth.InitKey()
 	// start web server
 	route.StartWebServer()
 

@@ -15,6 +15,44 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/.well-known/jwks.json": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "well-known"
+                ],
+                "summary": "JWKS",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/wellknown.JWKS"
+                        }
+                    }
+                }
+            }
+        },
+        "/.well-known/openid-configuration": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "well-known"
+                ],
+                "summary": "OpenID configuration",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/wellknown.OpenIDConfiguration"
+                        }
+                    }
+                }
+            }
+        },
         "/auth/authorize": {
             "get": {
                 "produces": [
@@ -331,6 +369,91 @@ const docTemplate = `{
                 }
             }
         },
+        "/auth/verify-email": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Verify email",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Verification token",
+                        "name": "token",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/auth.emailVerificationResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/auth.OAuthErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/auth.OAuthErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/verify-email/request": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Request email verification",
+                "parameters": [
+                    {
+                        "description": "Email verification request",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/auth.emailVerificationRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/auth.emailVerificationResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/auth.OAuthErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/auth.OAuthErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/scopes": {
             "get": {
                 "produces": [
@@ -588,6 +711,25 @@ const docTemplate = `{
                 }
             }
         },
+        "auth.emailVerificationRequest": {
+            "type": "object",
+            "required": [
+                "email"
+            ],
+            "properties": {
+                "email": {
+                    "type": "string"
+                }
+            }
+        },
+        "auth.emailVerificationResponse": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
+                }
+            }
+        },
         "external.SchemaError": {
             "type": "object",
             "properties": {
@@ -667,6 +809,261 @@ const docTemplate = `{
                 },
                 "key": {
                     "type": "string"
+                }
+            }
+        },
+        "wellknown.JWK": {
+            "type": "object",
+            "properties": {
+                "alg": {
+                    "description": "Algorithm (e.g., RS256)",
+                    "type": "string"
+                },
+                "e": {
+                    "description": "Exponent for RSA",
+                    "type": "string"
+                },
+                "kid": {
+                    "description": "Key ID",
+                    "type": "string"
+                },
+                "kty": {
+                    "description": "Key Type (e.g., RSA)",
+                    "type": "string"
+                },
+                "n": {
+                    "description": "Modulus for RSA",
+                    "type": "string"
+                },
+                "use": {
+                    "description": "Public Key Use (e.g., sig for signature)",
+                    "type": "string"
+                }
+            }
+        },
+        "wellknown.JWKS": {
+            "type": "object",
+            "properties": {
+                "keys": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/wellknown.JWK"
+                    }
+                }
+            }
+        },
+        "wellknown.OpenIDConfiguration": {
+            "type": "object",
+            "properties": {
+                "acr_values_supported": {
+                    "description": "OPTIONAL",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "authorization_endpoint": {
+                    "description": "REQUIRED",
+                    "type": "string"
+                },
+                "claim_types_supported": {
+                    "description": "OPTIONAL",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "claims_locales_supported": {
+                    "description": "OPTIONAL",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "claims_parameter_supported": {
+                    "description": "OPTIONAL (default: false)",
+                    "type": "boolean"
+                },
+                "claims_supported": {
+                    "description": "RECOMMENDED",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "display_values_supported": {
+                    "description": "OPTIONAL",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "end_session_endpoint": {
+                    "description": "OPTIONAL",
+                    "type": "string"
+                },
+                "grant_types_supported": {
+                    "description": "OPTIONAL",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "id_token_encryption_alg_values_supported": {
+                    "description": "OPTIONAL",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "id_token_encryption_enc_values_supported": {
+                    "description": "OPTIONAL",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "id_token_signing_alg_values_supported": {
+                    "description": "REQUIRED (must include RS256)",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "issuer": {
+                    "description": "REQUIRED",
+                    "type": "string"
+                },
+                "jwks_uri": {
+                    "description": "REQUIRED",
+                    "type": "string"
+                },
+                "op_policy_uri": {
+                    "description": "OPTIONAL",
+                    "type": "string"
+                },
+                "op_tos_uri": {
+                    "description": "OPTIONAL",
+                    "type": "string"
+                },
+                "registration_endpoint": {
+                    "description": "RECOMMENDED",
+                    "type": "string"
+                },
+                "request_object_encryption_alg_values_supported": {
+                    "description": "OPTIONAL",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "request_object_encryption_enc_values_supported": {
+                    "description": "OPTIONAL",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "request_object_signing_alg_values_supported": {
+                    "description": "OPTIONAL (servers SHOULD support none and RS256)",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "request_parameter_supported": {
+                    "description": "OPTIONAL (default: false)",
+                    "type": "boolean"
+                },
+                "request_uri_parameter_supported": {
+                    "description": "OPTIONAL (default: true)",
+                    "type": "boolean"
+                },
+                "require_request_uri_registration": {
+                    "description": "OPTIONAL (default: false)",
+                    "type": "boolean"
+                },
+                "response_modes_supported": {
+                    "description": "OPTIONAL",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "response_types_supported": {
+                    "description": "REQUIRED",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "scopes_supported": {
+                    "description": "RECOMMENDED",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "service_documentation": {
+                    "description": "OPTIONAL",
+                    "type": "string"
+                },
+                "subject_types_supported": {
+                    "description": "REQUIRED",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "token_endpoint": {
+                    "description": "REQUIRED (unless OP only supports Implicit Flow)",
+                    "type": "string"
+                },
+                "token_endpoint_auth_methods_supported": {
+                    "description": "OPTIONAL",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "token_endpoint_auth_signing_alg_values_supported": {
+                    "description": "OPTIONAL (servers SHOULD support RS256)",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "ui_locales_supported": {
+                    "description": "OPTIONAL",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "userinfo_encryption_alg_values_supported": {
+                    "description": "OPTIONAL",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "userinfo_encryption_enc_values_supported": {
+                    "description": "OPTIONAL",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "userinfo_endpoint": {
+                    "description": "RECOMMENDED",
+                    "type": "string"
+                },
+                "userinfo_signing_alg_values_supported": {
+                    "description": "OPTIONAL",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         }

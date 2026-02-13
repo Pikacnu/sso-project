@@ -90,11 +90,6 @@ func GenerateKeys() (*KeyPair, error) {
 		Kid:        kidStr,
 	}
 
-	err = os.WriteFile("private_key.pem", privateKeyPEM, 0600)
-	if err != nil {
-		return nil, err
-	}
-
 	// Also persist public key PEM and metadata into database (OpenIDKey table)
 	pubBytes, err := x509.MarshalPKIXPublicKey(publicKey)
 	if err != nil {

@@ -66,6 +66,18 @@ definitions:
       sub:
         type: string
     type: object
+  auth.emailVerificationRequest:
+    properties:
+      email:
+        type: string
+    required:
+    - email
+    type: object
+  auth.emailVerificationResponse:
+    properties:
+      message:
+        type: string
+    type: object
   external.SchemaError:
     properties:
       actual:
@@ -120,12 +132,219 @@ definitions:
       key:
         type: string
     type: object
+  wellknown.JWK:
+    properties:
+      alg:
+        description: Algorithm (e.g., RS256)
+        type: string
+      e:
+        description: Exponent for RSA
+        type: string
+      kid:
+        description: Key ID
+        type: string
+      kty:
+        description: Key Type (e.g., RSA)
+        type: string
+      "n":
+        description: Modulus for RSA
+        type: string
+      use:
+        description: Public Key Use (e.g., sig for signature)
+        type: string
+    type: object
+  wellknown.JWKS:
+    properties:
+      keys:
+        items:
+          $ref: '#/definitions/wellknown.JWK'
+        type: array
+    type: object
+  wellknown.OpenIDConfiguration:
+    properties:
+      acr_values_supported:
+        description: OPTIONAL
+        items:
+          type: string
+        type: array
+      authorization_endpoint:
+        description: REQUIRED
+        type: string
+      claim_types_supported:
+        description: OPTIONAL
+        items:
+          type: string
+        type: array
+      claims_locales_supported:
+        description: OPTIONAL
+        items:
+          type: string
+        type: array
+      claims_parameter_supported:
+        description: 'OPTIONAL (default: false)'
+        type: boolean
+      claims_supported:
+        description: RECOMMENDED
+        items:
+          type: string
+        type: array
+      display_values_supported:
+        description: OPTIONAL
+        items:
+          type: string
+        type: array
+      end_session_endpoint:
+        description: OPTIONAL
+        type: string
+      grant_types_supported:
+        description: OPTIONAL
+        items:
+          type: string
+        type: array
+      id_token_encryption_alg_values_supported:
+        description: OPTIONAL
+        items:
+          type: string
+        type: array
+      id_token_encryption_enc_values_supported:
+        description: OPTIONAL
+        items:
+          type: string
+        type: array
+      id_token_signing_alg_values_supported:
+        description: REQUIRED (must include RS256)
+        items:
+          type: string
+        type: array
+      issuer:
+        description: REQUIRED
+        type: string
+      jwks_uri:
+        description: REQUIRED
+        type: string
+      op_policy_uri:
+        description: OPTIONAL
+        type: string
+      op_tos_uri:
+        description: OPTIONAL
+        type: string
+      registration_endpoint:
+        description: RECOMMENDED
+        type: string
+      request_object_encryption_alg_values_supported:
+        description: OPTIONAL
+        items:
+          type: string
+        type: array
+      request_object_encryption_enc_values_supported:
+        description: OPTIONAL
+        items:
+          type: string
+        type: array
+      request_object_signing_alg_values_supported:
+        description: OPTIONAL (servers SHOULD support none and RS256)
+        items:
+          type: string
+        type: array
+      request_parameter_supported:
+        description: 'OPTIONAL (default: false)'
+        type: boolean
+      request_uri_parameter_supported:
+        description: 'OPTIONAL (default: true)'
+        type: boolean
+      require_request_uri_registration:
+        description: 'OPTIONAL (default: false)'
+        type: boolean
+      response_modes_supported:
+        description: OPTIONAL
+        items:
+          type: string
+        type: array
+      response_types_supported:
+        description: REQUIRED
+        items:
+          type: string
+        type: array
+      scopes_supported:
+        description: RECOMMENDED
+        items:
+          type: string
+        type: array
+      service_documentation:
+        description: OPTIONAL
+        type: string
+      subject_types_supported:
+        description: REQUIRED
+        items:
+          type: string
+        type: array
+      token_endpoint:
+        description: REQUIRED (unless OP only supports Implicit Flow)
+        type: string
+      token_endpoint_auth_methods_supported:
+        description: OPTIONAL
+        items:
+          type: string
+        type: array
+      token_endpoint_auth_signing_alg_values_supported:
+        description: OPTIONAL (servers SHOULD support RS256)
+        items:
+          type: string
+        type: array
+      ui_locales_supported:
+        description: OPTIONAL
+        items:
+          type: string
+        type: array
+      userinfo_encryption_alg_values_supported:
+        description: OPTIONAL
+        items:
+          type: string
+        type: array
+      userinfo_encryption_enc_values_supported:
+        description: OPTIONAL
+        items:
+          type: string
+        type: array
+      userinfo_endpoint:
+        description: RECOMMENDED
+        type: string
+      userinfo_signing_alg_values_supported:
+        description: OPTIONAL
+        items:
+          type: string
+        type: array
+    type: object
 info:
   contact: {}
   description: SSO server API
   title: SSO API
   version: "1.0"
 paths:
+  /.well-known/jwks.json:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/wellknown.JWKS'
+      summary: JWKS
+      tags:
+      - well-known
+  /.well-known/openid-configuration:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/wellknown.OpenIDConfiguration'
+      summary: OpenID configuration
+      tags:
+      - well-known
   /auth/authorize:
     get:
       parameters:
@@ -333,6 +552,61 @@ paths:
           schema:
             $ref: '#/definitions/auth.ErrorResponse'
       summary: User info
+      tags:
+      - auth
+  /auth/verify-email:
+    get:
+      parameters:
+      - description: Verification token
+        in: query
+        name: token
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/auth.emailVerificationResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/auth.OAuthErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/auth.OAuthErrorResponse'
+      summary: Verify email
+      tags:
+      - auth
+  /auth/verify-email/request:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Email verification request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/auth.emailVerificationRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/auth.emailVerificationResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/auth.OAuthErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/auth.OAuthErrorResponse'
+      summary: Request email verification
       tags:
       - auth
   /scopes:

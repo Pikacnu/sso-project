@@ -52,6 +52,11 @@ type OpenIDConfiguration struct {
 	EndSessionEndpoint                         string   `json:"end_session_endpoint,omitempty"`                             // OPTIONAL
 }
 
+// @Summary OpenID configuration
+// @Tags well-known
+// @Produce json
+// @Success 200 {object} OpenIDConfiguration
+// @Router /.well-known/openid-configuration [get]
 func openidConfigurationHandler(ctx *gin.Context) {
 	issuer := getIssuer(ctx)
 	authorizationEndpoint := issuer + "/auth/authorize"
@@ -124,9 +129,14 @@ type JWK struct {
 	E   string `json:"e"`   // Exponent for RSA
 }
 
+// @Summary JWKS
+// @Tags well-known
+// @Produce json
+// @Success 200 {object} JWKS
+// @Router /.well-known/jwks.json [get]
 func jwksHandler(ctx *gin.Context) {
 	keyPairs := auth.GetAvailableKeyPair()
-	ctx.JSON(200, keyPairs)
+	ctx.JSON(200, JWKS{Keys: keyPairs})
 }
 
 func getIssuer(ctx *gin.Context) string {
