@@ -116,10 +116,6 @@ func openidConfigurationHandler(ctx *gin.Context) {
 	ctx.JSON(200, extendedConfig)
 }
 
-type JWKS struct {
-	Keys []JWK `json:"keys"`
-}
-
 type JWK struct {
 	Kid string `json:"kid"` // Key ID
 	Kty string `json:"kty"` // Key Type (e.g., RSA)
@@ -132,11 +128,11 @@ type JWK struct {
 // @Summary JWKS
 // @Tags well-known
 // @Produce json
-// @Success 200 {object} JWKS
+// @Success 200 {object} map[string]interface{}
 // @Router /.well-known/jwks.json [get]
 func jwksHandler(ctx *gin.Context) {
 	keyPairs := auth.GetAvailableKeyPair()
-	ctx.JSON(200, JWKS{Keys: keyPairs})
+	ctx.JSON(200, gin.H{"keys": keyPairs})
 }
 
 func getIssuer(ctx *gin.Context) string {
