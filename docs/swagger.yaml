@@ -396,6 +396,20 @@ info:
   title: SSO API
   version: "1.0"
 paths:
+  /:
+    get:
+      description: Get SSO service information and available endpoints
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Service information
+      tags:
+      - system
   /.well-known/jwks.json:
     get:
       produces:
@@ -1187,6 +1201,21 @@ paths:
       summary: Rotate client secret
       tags:
       - clients
+  /health:
+    get:
+      description: Check if the service is healthy
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Health check
+      tags:
+      - system
   /permissions:
     get:
       description: List all permissions

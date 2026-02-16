@@ -49,42 +49,45 @@ func StartWebServer() {
 	docs.SwaggerInfo.BasePath = "/"
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
-	// @Summary Health check
-	// @Description Check if the service is healthy
-	// @Tags system
-	// @Produce json
-	// @Success 200 {object} map[string]string
-	// @Router /health [get]
-	router.GET("/health", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"status": "healthy",
-		})
-	})
-
-	// @Summary Service information
-	// @Description Get SSO service information and available endpoints
-	// @Tags system
-	// @Produce json
-	// @Success 200 {object} map[string]interface{}
-	// @Router / [get]
-	router.GET("/", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"service": "SSO Server",
-			"version": "1.0",
-			"endpoints": gin.H{
-				"health":     "/health",
-				"login":      "/auth/login",
-				"authorize":  "/auth/authorize",
-				"token":      "/auth/token",
-				"swagger":    "/swagger/index.html",
-				"well-known": "/.well-known/openid-configuration",
-			},
-		})
-	})
+	router.GET("/health", healthCheckHandler)
+	router.GET("/", serviceInfoHandler)
 
 	for _, register := range routes {
 		register(router)
 	}
 
 	router.Run(config.SystemEnv.BindAddr())
+}
+
+// @Summary Health check
+// @Description Check if the service is healthy
+// @Tags system
+// @Produce json
+// @Success 200 {object} map[string]string
+// @Router /health [get]
+func healthCheckHandler(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{
+		"status": "healthy",
+	})
+}
+
+// @Summary Service information
+// @Description Get SSO service information and available endpoints
+// @Tags system
+// @Produce json
+// @Success 200 {object} map[string]interface{}
+// @Router / [get]
+func serviceInfoHandler(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{
+		"service": "SSO Server",
+		"version": "1.0",
+		"endpoints": gin.H{
+			"health":     "/health",
+			"login":      "/auth/login",
+			"authorize":  "/auth/authorize",
+			"token":      "/auth/token",
+			"swagger":    "/swagger/index.html",
+			"well-known": "/.well-known/openid-configuration",
+		},
+	})
 }

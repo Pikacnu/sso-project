@@ -26,6 +26,14 @@ func ClientMiddleware() gin.HandlerFunc {
 			return
 		}
 
+		isProtected := false
+		for _, protectedPath := range ProtectedPaths {
+			if strings.HasPrefix(urlPath, protectedPath) {
+				isProtected = true
+				break
+			}
+		}
+
 		secret := c.GetHeader("Authorization")
 		clientID := c.GetHeader("X-Client-ID")
 
@@ -35,6 +43,10 @@ func ClientMiddleware() gin.HandlerFunc {
 		}
 
 		if strings.TrimSpace(secret) == "" || strings.TrimSpace(clientID) == "" {
+			if !isProtected {
+				c.Next()
+				return
+			}
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Missing Authorization header"})
 			return
 		}
