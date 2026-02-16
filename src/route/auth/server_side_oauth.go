@@ -12,6 +12,7 @@ import (
 	"sso-server/ent/generated/refreshtoken"
 	"sso-server/ent/generated/scope"
 	"sso-server/src/auth"
+	"sso-server/src/config"
 	"sso-server/src/db"
 	. "sso-server/src/db"
 	"strings"
@@ -73,9 +74,25 @@ func authorizeHandler(ctx *gin.Context) {
 	// OIDC nonce parameter for replay attack prevention
 	nonce := ctx.Query("nonce")
 
-	if clientId == "" || redirectUri == "" || scopeParam == "" || state == "" {
+	if clientId == "" || redirectUri == "" {
 		ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid_request", "error_description": "Missing required parameters"})
 		return
+	}
+
+	// For admin-console, provide default values if not specified
+	if clientId == "admin-console" {
+		if scopeParam == "" {
+			scopeParam = "openid,profile,email"
+		}
+		if state == "" {
+			state = uuid.New().String()
+		}
+	} else {
+		// For regular OAuth clients, scope and state are required
+		if scopeParam == "" || state == "" {
+			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid_request", "error_description": "Missing required parameters: scope and state"})
+			return
+		}
 	}
 
 	// Validate code_challenge_method if PKCE is used
@@ -91,54 +108,63 @@ func authorizeHandler(ctx *gin.Context) {
 
 	// Use Ent client to load OAuth client
 	ctxBg := context.Background()
-	clientUUID, err := uuid.Parse(clientId)
-	if err != nil {
-		ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid_client", "error_description": "Invalid client_id format"})
-		return
-	}
-	oauthClientEnt, err := Client.OAuthClient.Query().Where(oauthclient.IDEQ(clientUUID)).Only(ctxBg)
-	if err != nil {
-		if ent.IsNotFound(err) {
-			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid_client", "error_description": "Invalid client_id"})
+
+	// Special handling for admin-console (frontend demonstration)
+	var oauthClientEnt *ent.OAuthClient
+
+	if clientId == "admin-console" {
+		// For admin console demo, skip validation
+		// Allow any redirect_uri and scope for demo
+	} else {
+		clientUUID, err := uuid.Parse(clientId)
+		if err != nil {
+			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid_client", "error_description": "Invalid client_id format"})
 			return
 		}
-		ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "server_error", "error_description": "Failed to query client"})
-		return
-	}
-
-	allowRedirectUri := strings.Split(oauthClientEnt.RedirectUris, ",")
-
-	if !slices.Contains(allowRedirectUri, redirectUri) {
-		ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid_request", "error_description": "Invalid redirect_uri"})
-		return
-	}
-
-	allowScopes := strings.Split(oauthClientEnt.AllowedScopes, ",")
-
-	scopes := strings.Split(scopeParam, ",")
-
-	isValidScope := true
-	for _, s := range scopes {
-		if !slices.Contains(allowScopes, s) {
-			isValidScope = false
-			break
+		oauthClientEnt, err = Client.OAuthClient.Query().Where(oauthclient.IDEQ(clientUUID)).Only(ctxBg)
+		if err != nil {
+			if ent.IsNotFound(err) {
+				ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid_client", "error_description": "Invalid client_id"})
+				return
+			}
+			ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "server_error", "error_description": "Failed to query client"})
+			return
 		}
-	}
 
-	if !isValidScope {
-		ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid_scope", "error_description": "One or more requested scopes are invalid"})
-		return
-	}
+		allowRedirectUri := strings.Split(oauthClientEnt.RedirectUris, ",")
 
-	// Verify scopes exist using Ent
-	scopeEntities, err := Client.Scope.Query().Where(scope.KeyIn(scopes...)).All(ctxBg)
-	if err != nil {
-		ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to query scopes"})
-		return
-	}
-	if len(scopeEntities) != len(scopes) {
-		ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid scope"})
-		return
+		if !slices.Contains(allowRedirectUri, redirectUri) {
+			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid_request", "error_description": "Invalid redirect_uri"})
+			return
+		}
+
+		allowScopes := strings.Split(oauthClientEnt.AllowedScopes, ",")
+
+		scopes := strings.Split(scopeParam, ",")
+
+		isValidScope := true
+		for _, s := range scopes {
+			if !slices.Contains(allowScopes, s) {
+				isValidScope = false
+				break
+			}
+		}
+
+		if !isValidScope {
+			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid_scope", "error_description": "One or more requested scopes are invalid"})
+			return
+		}
+
+		// Verify scopes exist using Ent
+		scopeEntities, err := Client.Scope.Query().Where(scope.KeyIn(scopes...)).All(ctxBg)
+		if err != nil {
+			ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to query scopes"})
+			return
+		}
+		if len(scopeEntities) != len(scopes) {
+			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid_scope"})
+			return
+		}
 	}
 
 	hostname := ctx.Request.Host
@@ -147,12 +173,17 @@ func authorizeHandler(ctx *gin.Context) {
 		protocol = "https"
 	}
 
-	if providor == "" {
-		ctx.Redirect(http.StatusTemporaryRedirect, protocol+"://"+hostname+"/auth/login")
-	}
-
 	// Generate secure ID for OAuth flow
 	flowID := uuid.New()
+
+	// For admin-console, use a special client ID, otherwise use the OAuth Client from database
+	var flowClientID uuid.UUID
+	if clientId == "admin-console" {
+		// Use a fixed UUID for admin-console frontend demo
+		flowClientID = uuid.MustParse("00000000-0000-0000-0000-000000000000")
+	} else {
+		flowClientID = oauthClientEnt.ID
+	}
 
 	// Prepare pointer values for optional PKCE and OIDC fields
 	var ccPtr *string
@@ -168,27 +199,41 @@ func authorizeHandler(ctx *gin.Context) {
 		noncePtr = &nonce
 	}
 
-	// Persist OAuthFlow using Ent
-	_, err = Client.OAuthFlow.Create().
-		SetClientID(oauthClientEnt.ID).
+	// Persist OAuthFlow using Ent (provider can be empty if user will choose later)
+	flowBuilder := Client.OAuthFlow.Create().
+		SetClientID(flowClientID).
 		SetRedirectURI(redirectUri).
-		SetProvider(providor).
 		SetClientState(state).
 		SetScope(scopeParam).
 		SetExpiresAt(time.Now().Add(5 * time.Minute)).
 		SetID(flowID).
 		SetNillableCodeChallenge(ccPtr).
 		SetNillableCodeChallengeMethod(ccmPtr).
-		SetNillableNonce(noncePtr).
-		Save(ctxBg)
+		SetNillableNonce(noncePtr)
+
+	// Only set provider if specified
+	if providor != "" {
+		flowBuilder = flowBuilder.SetProvider(providor)
+	}
+
+	_, err := flowBuilder.Save(ctxBg)
 	if err != nil {
 		ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to create authorization code"})
 		return
 	}
 
-	var redirectURL string
 	flowIDStr := flowID.String()
 	ctx.SetCookie("OAuth_ID", flowIDStr, int(5*time.Minute/time.Second), "/", "", false, true)
+
+	// If no provider specified, redirect to frontend login page
+	if providor == "" {
+		frontendURL := config.SystemEnv.FrontendURL
+		ctx.Redirect(http.StatusTemporaryRedirect, frontendURL+"/auth/login?flow_id="+flowIDStr)
+		return
+	}
+
+	// Provider specified, redirect directly to provider login
+	var redirectURL string
 	switch providor {
 	case "discord":
 		redirectURL = protocol + "://" + hostname + "/auth/discord/login"
@@ -196,6 +241,7 @@ func authorizeHandler(ctx *gin.Context) {
 		redirectURL = protocol + "://" + hostname + "/auth/google/login"
 	default:
 		ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Unsupported provider"})
+		return
 	}
 	ctx.Redirect(http.StatusTemporaryRedirect, redirectURL)
 }
@@ -256,12 +302,66 @@ func authCallbackHandler(ctx *gin.Context) {
 		ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to query oauth flow"})
 		return
 	}
-	if oauthFlowEnt.ID == uuid.Nil || oauthFlowEnt.ClientID == uuid.Nil || state != oauthFlowEnt.ClientState {
+	if oauthFlowEnt.ID == uuid.Nil || state != oauthFlowEnt.ClientState {
 		ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid or expired code"})
 		return
 	}
 
-	// Generate secure authorization code
+	// If user has been authenticated via provider (userID is set), create session and set token
+	if oauthFlowEnt.UserID != nil {
+		userEnt, err := Client.User.Get(ctxBg, *oauthFlowEnt.UserID)
+		if err != nil {
+			ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to load user"})
+			return
+		}
+
+		// Create server-side session with secure UUID
+		sessionUUID := uuid.New()
+		sessionID := sessionUUID.String()
+		exp := time.Now().Add(time.Hour * 24 * 7) // 7 days
+
+		// Create session record in Ent
+		if _, err := Client.Session.Create().
+			SetID(sessionUUID).
+			SetUserID(userEnt.ID).
+			SetUserAgent(ctx.GetHeader("User-Agent")).
+			SetIPAddress(ctx.ClientIP()).
+			SetExpiresAt(exp).
+			Save(ctxBg); err != nil {
+			ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to create session"})
+			return
+		}
+
+		// Create JWT with session ID
+		avatarStr := ""
+		if userEnt.Avatar != nil {
+			avatarStr = *userEnt.Avatar
+		}
+		dbUser := db.UserJWTPayload{
+			ID:            userEnt.ID.String(),
+			Email:         userEnt.Email,
+			Username:      userEnt.Username,
+			Avatar:        avatarStr,
+			EmailVerified: userEnt.EmailVerified,
+		}
+		dbSession := db.SessionJWTPayload{
+			ID:        sessionID,
+			UserID:    userEnt.ID.String(),
+			ExpiresAt: exp,
+		}
+		tokenString, err := auth.GenerateJWT(dbUser, dbSession)
+		if err != nil {
+			ctx.AbortWithError(http.StatusInternalServerError, err)
+			return
+		}
+
+		ctx.SetCookie("session_token", tokenString, int(time.Hour*24*7/time.Second), "/", "", false, true)
+		// Redirect to frontend with session established
+		ctx.Redirect(http.StatusTemporaryRedirect, oauthFlowEnt.RedirectURI)
+		return
+	}
+
+	// Fallback: Generate authorization code for standard OAuth flow (not used in admin-console demo)
 	authCode, err := auth.GenerateSecureToken()
 	if err != nil {
 		ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate authorization code"})
@@ -278,10 +378,6 @@ func authCallbackHandler(ctx *gin.Context) {
 		SetNillableCodeChallenge(oauthFlowEnt.CodeChallenge).
 		SetNillableCodeChallengeMethod(oauthFlowEnt.CodeChallengeMethod).
 		SetNillableNonce(oauthFlowEnt.Nonce)
-
-	if oauthFlowEnt.UserID != nil {
-		builder.SetUserID(*oauthFlowEnt.UserID)
-	}
 
 	_, err = builder.Save(ctxBg)
 	if err != nil {

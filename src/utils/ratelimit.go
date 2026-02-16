@@ -2,7 +2,6 @@ package utils
 
 import (
 	"errors"
-	"sso-server/src/config"
 	"sync"
 	"time"
 )
@@ -14,13 +13,6 @@ type RateLimitConfig struct {
 	RequestsPerMinute   int
 	RequestTimeMapMutex sync.RWMutex
 	RequestLimiterFunc  func(key string) bool
-}
-
-func init() {
-	err := RateLimitCreator(config.SystemEnv.RateLimitPerMinute)
-	if err != nil {
-		panic("Failed to initialize rate limiter: " + err.Error())
-	}
 }
 
 func RateLimitCreator(

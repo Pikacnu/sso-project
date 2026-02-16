@@ -8,6 +8,7 @@ package main
 
 import (
 	"context"
+	"log"
 	"sso-server/ent/generated/openidkey"
 	"sso-server/ent/generated/session"
 	"sso-server/src/auth"
@@ -15,12 +16,17 @@ import (
 	"sso-server/src/db"
 	"sso-server/src/external"
 	"sso-server/src/route"
+	"sso-server/src/utils"
 	"time"
 )
 
 func main() {
 	// Load config from environment variables
 	SystemEnv := config.NewEnvFromEnv()
+	// Initialize rate limiter
+	if err := utils.RateLimitCreator(SystemEnv.RateLimitPerMinute); err != nil {
+		log.Fatalf("Failed to initialize rate limiter: %v", err)
+	}
 	// init DB Connection
 	db.InitDB()
 	// Initialize RSA keys for OpenID Connect

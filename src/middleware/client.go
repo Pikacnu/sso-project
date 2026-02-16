@@ -21,8 +21,18 @@ func ClientMiddleware() gin.HandlerFunc {
 			return
 		}
 
+		if _, ok := c.Get("user_id"); ok {
+			c.Next()
+			return
+		}
+
 		secret := c.GetHeader("Authorization")
 		clientID := c.GetHeader("X-Client-ID")
+
+		if strings.HasPrefix(strings.TrimSpace(secret), "Bearer ") {
+			c.Next()
+			return
+		}
 
 		if strings.TrimSpace(secret) == "" || strings.TrimSpace(clientID) == "" {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Missing Authorization header"})

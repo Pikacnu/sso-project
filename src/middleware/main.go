@@ -9,11 +9,13 @@ import (
 var ProtectedPaths = []string{
 	"/api/",
 	"/user/",
+	"/clients",
 }
 
 var PublicPaths = []string{
 	"/login",
 	"/signup",
+	"/auth/",
 	"/.well-known/",
 	"/swagger/",
 }

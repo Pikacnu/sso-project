@@ -31,14 +31,14 @@ func SessionMiddleware() gin.HandlerFunc {
 			}
 		}
 
-		if c.Request.Header.Get("Authorization") != "" {
+		if !isProtected {
 			c.Next()
-			// Skip session middleware for token-based auth
 			return
 		}
 
-		if !isProtected {
+		if c.Request.Header.Get("Authorization") != "" {
 			c.Next()
+			// Skip session middleware for token-based auth
 			return
 		}
 

@@ -13,6 +13,7 @@ type Env struct {
 	AppName                 string `json:"app_name"`
 	Port                    string `json:"port"`
 	Hostname                string `json:"hostname"`
+	FrontendURL             string `json:"frontend_url"`
 	Debug                   bool   `json:"debug"`
 	DatabaseURL             string `json:"database_url"`
 	GoogleClientID          string `json:"google_client_id"`
@@ -43,6 +44,7 @@ func NewEnvFromEnv() *Env {
 		AppName:                 getEnv("APP_NAME", "sso-server"),
 		Port:                    getEnv("PORT", "8080"),
 		Hostname:                getEnv("HOSTNAME", "localhost"),
+		FrontendURL:             getEnv("FRONTEND_URL", "http://localhost:5173"),
 		Debug:                   getEnvBool("DEBUG", "false"),
 		DatabaseURL:             getEnv("DATABASE_URL", "postgres://user:pass@localhost:5432/sso_db"),
 		GoogleClientID:          getEnv("GOOGLE_CLIENT_ID", "your-google-client-id"),

@@ -18,6 +18,17 @@ func RegisterAPIRoutes(router *gin.Engine) {
 	}
 }
 
+// @Summary Get current user data
+// @Description Get the authenticated user's data from session
+// @Tags api
+// @Security BearerAuth
+// @Produce json
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/user [get]
 func GetUserData(c *gin.Context) {
 	sessionID := c.MustGet("session_id").(string)
 	ctxBg := context.Background()

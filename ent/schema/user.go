@@ -42,5 +42,6 @@ func (User) Edges() []ent.Edge {
 		edge.To("scopes", Scope.Type),
 		edge.To("oauth_flows", OAuthFlow.Type),
 		edge.To("oauth_clients", OAuthClient.Type),
+		edge.To("roles", Role.Type),
 	}
 }

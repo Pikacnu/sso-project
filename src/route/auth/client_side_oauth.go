@@ -27,6 +27,7 @@ import (
 // @Produce json
 // @Param platform path string true "OAuth provider (discord or google)"
 // @Param redirect_url query string false "Redirect URL after login"
+// @Param flow_id query string false "OAuth flow ID (for server-side flow)"
 // @Success 302 {string} string "Redirect"
 // @Failure 400 {object} OAuthErrorResponse
 // @Router /auth/{platform}/login [get]
@@ -51,6 +52,12 @@ func loginHandler(ctx *gin.Context) {
 	}
 
 	redirectURL := ctx.Request.URL.Query().Get("redirect_url")
+	flowID := ctx.Request.URL.Query().Get("flow_id")
+
+	// If flow_id is provided (from frontend), set it as OAuth_ID cookie
+	if flowID != "" {
+		ctx.SetCookie("OAuth_ID", flowID, 300, "/", "", false, true)
+	}
 
 	CSRFToken := uuid.New().String()
 	url := OAuthConfig.AuthCodeURL(CSRFToken)

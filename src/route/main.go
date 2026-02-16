@@ -9,7 +9,11 @@ import (
 	"sso-server/src/middleware"
 	. "sso-server/src/route/api"
 	. "sso-server/src/route/auth"
+	. "sso-server/src/route/clients"
+	. "sso-server/src/route/permissions"
+	. "sso-server/src/route/roles"
 	. "sso-server/src/route/scopes"
+	. "sso-server/src/route/users"
 	. "sso-server/src/route/well_known"
 
 	"github.com/gin-gonic/gin"
@@ -24,7 +28,11 @@ func StartWebServer() {
 	routes := []func(*gin.Engine){
 		RegisterAPIRoutes,
 		RegisterAuthRoutes,
+		RegisterClientRoutes,
+		RegisterPermissionRoutes,
+		RegisterRoleRoutes,
 		RegisterScopeRoutes,
+		RegisterUserRoutes,
 		RegistrerWellKnownRoutes,
 	}
 
@@ -41,9 +49,36 @@ func StartWebServer() {
 	docs.SwaggerInfo.BasePath = "/"
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
+	// @Summary Health check
+	// @Description Check if the service is healthy
+	// @Tags system
+	// @Produce json
+	// @Success 200 {object} map[string]string
+	// @Router /health [get]
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"status": "healthy",
+		})
+	})
+
+	// @Summary Service information
+	// @Description Get SSO service information and available endpoints
+	// @Tags system
+	// @Produce json
+	// @Success 200 {object} map[string]interface{}
+	// @Router / [get]
+	router.GET("/", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{
+			"service": "SSO Server",
+			"version": "1.0",
+			"endpoints": gin.H{
+				"health":     "/health",
+				"login":      "/auth/login",
+				"authorize":  "/auth/authorize",
+				"token":      "/auth/token",
+				"swagger":    "/swagger/index.html",
+				"well-known": "/.well-known/openid-configuration",
+			},
 		})
 	})
 
