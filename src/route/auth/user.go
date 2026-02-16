@@ -101,7 +101,7 @@ func userInfoHandler(c *gin.Context) {
 			go func() {
 				ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 				defer cancel()
-				claims, schemaErrors, err := external.FetchExternalClaims(ctx, httpClient, scopeEnt, atEnt.UserID.String())
+				claims, schemaErrors, err := external.CachedFetchExternalClaims(ctx, httpClient, scopeEnt, atEnt.UserID.String())
 				results <- externalResult{
 					key:          scopeEnt.Key,
 					claims:       claims,

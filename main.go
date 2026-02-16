@@ -13,6 +13,7 @@ import (
 	"sso-server/src/auth"
 	"sso-server/src/config"
 	"sso-server/src/db"
+	"sso-server/src/external"
 	"sso-server/src/route"
 	"time"
 )
@@ -24,6 +25,8 @@ func main() {
 	db.InitDB()
 	// Initialize RSA keys for OpenID Connect
 	auth.InitKey()
+	// Health check external provider endpoints
+	external.HealthCheckExternalProviders(context.Background())
 	// start web server
 	route.StartWebServer()
 
