@@ -62,12 +62,12 @@ func main() {
 	)
 }
 
-func createIntervalTicker(d time.Duration, fn func()) <-chan time.Time {
+func createIntervalTicker(d time.Duration, fn func()) (<-chan time.Time, *time.Ticker) {
 	ticker := time.NewTicker(d)
 	go func() {
 		for range ticker.C {
 			fn()
 		}
 	}()
-	return ticker.C
+	return ticker.C, ticker
 }

@@ -27,6 +27,7 @@ type Env struct {
 	EmailSMTPPort       int    `json:"email_smtp_port"`
 	EmailSMTPUser       string `json:"email_smtp_user"`
 	EmailSMTPPassword   string `json:"email_smtp_password"`
+	RateLimitPerMinute  int    `json:"rate_limit_per_minute"`
 }
 
 var SystemEnv *Env
@@ -55,6 +56,7 @@ func NewEnvFromEnv() *Env {
 		EmailSMTPPort:       getEnvInt("EMAIL_SMTP_PORT", 587),
 		EmailSMTPUser:       getEnv("EMAIL_SMTP_USER", ""),
 		EmailSMTPPassword:   getEnv("EMAIL_SMTP_PASSWORD", ""),
+		RateLimitPerMinute:  getEnvInt("RATE_LIMIT_PER_MINUTE", 100),
 	}
 	return SystemEnv
 }
