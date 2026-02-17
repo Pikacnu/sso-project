@@ -1,0 +1,59 @@
+---
+import NavLayout from "../layouts/NavLayout.astro";
+---
+
+<NavLayout>
+	<main class="relative grow h-full w-full bg-gray-100 dark:bg-slate-950">
+		<div class="mx-auto w-full max-w-6xl p-8">
+			<section class="grid gap-10 rounded-3xl border border-amber-200/70 bg-white/95 p-10 dark:border-amber-900/50 dark:bg-slate-900/80">
+				<div class="space-y-4">
+					<p class="text-xs font-semibold uppercase tracking-[0.42em] text-amber-600">SSO Platform</p>
+					<h1 class="text-4xl font-semibold text-slate-900 dark:text-slate-100 sm:text-5xl">
+						Manage identities, OAuth clients, and access control in one console.
+					</h1>
+					<p class="max-w-2xl text-base text-slate-600 dark:text-slate-300">
+						This frontend keeps the flow lightweight and defers verification to the Go backend. Use the
+						console to register clients, manage users, and keep permissions tidy across applications.
+					</p>
+					<div class="flex flex-wrap gap-3">
+						<a
+							href="/login"
+							class="inline-flex items-center rounded-2xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 dark:bg-amber-600"
+						>
+							Go to Login
+						</a>
+						<a
+							href="/clients"
+							class="inline-flex items-center rounded-2xl border border-amber-200 px-5 py-3 text-sm font-semibold text-amber-700 transition hover:border-amber-300 hover:bg-amber-50 dark:border-amber-700/60 dark:text-amber-300 dark:hover:bg-amber-600/20"
+						>
+							Open Admin Console
+						</a>
+					</div>
+				</div>
+				<div class="grid gap-4 md:grid-cols-3">
+					<div class="rounded-2xl border border-amber-100 bg-amber-50/60 p-5 text-sm text-slate-700 dark:border-slate-800 dark:bg-slate-800/60 dark:text-slate-200">
+						<p class="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">OAuth 2.0</p>
+						<h3 class="mt-2 text-lg font-semibold text-slate-900 dark:text-slate-100">Client lifecycle</h3>
+						<p class="mt-2 text-sm text-slate-600 dark:text-slate-300">
+							Create, rotate secrets, and manage redirect URIs with a single flow-aware console.
+						</p>
+					</div>
+					<div class="rounded-2xl border border-amber-100 bg-amber-50/60 p-5 text-sm text-slate-700 dark:border-slate-800 dark:bg-slate-800/60 dark:text-slate-200">
+						<p class="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">Identity</p>
+						<h3 class="mt-2 text-lg font-semibold text-slate-900 dark:text-slate-100">User management</h3>
+						<p class="mt-2 text-sm text-slate-600 dark:text-slate-300">
+							Keep user data current, handle email onboarding, and monitor verification status.
+						</p>
+					</div>
+					<div class="rounded-2xl border border-amber-100 bg-amber-50/60 p-5 text-sm text-slate-700 dark:border-slate-800 dark:bg-slate-800/60 dark:text-slate-200">
+						<p class="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">Authorization</p>
+						<h3 class="mt-2 text-lg font-semibold text-slate-900 dark:text-slate-100">Roles & scopes</h3>
+						<p class="mt-2 text-sm text-slate-600 dark:text-slate-300">
+							Define fine-grained permissions and assign roles to meet compliance needs.
+						</p>
+					</div>
+				</div>
+			</section>
+		</div>
+	</main>
+</NavLayout>
