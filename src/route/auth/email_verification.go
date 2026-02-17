@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"net/smtp"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -24,7 +25,10 @@ import (
 const emailVerificationTTL = 24 * time.Hour
 
 type emailVerificationRequest struct {
-	Email string `json:"email" form:"email" binding:"required"`
+	Email       string `json:"email" form:"email" binding:"required"`
+	FlowID      string `json:"flow_id" form:"flow_id"`
+	RedirectURL string `json:"redirect_url" form:"redirect_url"`
+	ReturnToken bool   `json:"return_token" form:"return_token"`
 }
 
 type emailVerificationResponse struct {
@@ -72,7 +76,11 @@ func requestEmailVerificationHandler(ctx *gin.Context) {
 		return
 	}
 
-	verificationLink := buildVerificationLink(ctx, token)
+	verificationLink := buildVerificationLink(ctx, token, verificationLinkOptions{
+		FlowID:      strings.TrimSpace(req.FlowID),
+		RedirectURL: strings.TrimSpace(req.RedirectURL),
+		ReturnToken: req.ReturnToken,
+	})
 	if err := sendVerificationEmail(ctx, req.Email, verificationLink); err != nil {
 		ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "server_error", "error_description": "Failed to send verification email"})
 		return
@@ -91,6 +99,9 @@ func requestEmailVerificationHandler(ctx *gin.Context) {
 // @Router /auth/verify-email [get]
 func verifyEmailHandler(ctx *gin.Context) {
 	token := ctx.Query("token")
+	flowID := strings.TrimSpace(ctx.Query("flow_id"))
+	redirectURL := strings.TrimSpace(ctx.Query("redirect_url"))
+	returnToken := parseReturnTokenParam(ctx.Query("return_token"))
 	if token == "" {
 		ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid_request", "error_description": "Missing token"})
 		return
@@ -117,10 +128,48 @@ func verifyEmailHandler(ctx *gin.Context) {
 		return
 	}
 
+	if returnToken {
+		result, err := createSessionToken(ctxBg, userEnt, ctx.GetHeader("User-Agent"), ctx.ClientIP())
+		if err != nil {
+			ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "server_error", "error_description": "Failed to create session"})
+			return
+		}
+		ctx.SetCookie("session_token", result.Token, int(time.Hour*24*7/time.Second), "/", "", false, true)
+		ctx.JSON(http.StatusOK, gin.H{
+			"message":    "Email verified",
+			"token":      result.Token,
+			"expires_at": result.ExpiresAt,
+		})
+		return
+	}
+
+	if flowID != "" {
+		if redirected := attachUserToFlowAndRedirect(ctx, flowID, userEnt.ID); redirected {
+			return
+		}
+	}
+
+	if redirectURL != "" {
+		result, err := createSessionToken(ctxBg, userEnt, ctx.GetHeader("User-Agent"), ctx.ClientIP())
+		if err != nil {
+			ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "server_error", "error_description": "Failed to create session"})
+			return
+		}
+		ctx.SetCookie("session_token", result.Token, int(time.Hour*24*7/time.Second), "/", "", false, true)
+		ctx.Redirect(http.StatusTemporaryRedirect, redirectURL)
+		return
+	}
+
 	ctx.JSON(http.StatusOK, gin.H{"message": "Email verified"})
 }
 
-func buildVerificationLink(ctx *gin.Context, token string) string {
+type verificationLinkOptions struct {
+	FlowID      string
+	RedirectURL string
+	ReturnToken bool
+}
+
+func buildVerificationLink(ctx *gin.Context, token string, opts verificationLinkOptions) string {
 	issuer := config.NewEnvFromEnv().Hostname
 	if issuer == "" || issuer == "localhost" {
 		issuer = ctx.Request.Host
@@ -129,7 +178,34 @@ func buildVerificationLink(ctx *gin.Context, token string) string {
 	if ctx.Request.TLS == nil {
 		protocol = "http"
 	}
-	return protocol + "://" + issuer + "/auth/verify-email?token=" + token
+
+	baseURL := protocol + "://" + issuer + "/auth/verify-email"
+	parsed, err := url.Parse(baseURL)
+	if err != nil {
+		return baseURL + "?token=" + token
+	}
+	query := parsed.Query()
+	query.Set("token", token)
+	if opts.FlowID != "" {
+		query.Set("flow_id", opts.FlowID)
+	}
+	if opts.RedirectURL != "" {
+		query.Set("redirect_url", opts.RedirectURL)
+	}
+	if opts.ReturnToken {
+		query.Set("return_token", "true")
+	}
+	parsed.RawQuery = query.Encode()
+	return parsed.String()
+}
+
+func parseReturnTokenParam(value string) bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "true", "1", "yes":
+		return true
+	default:
+		return false
+	}
 }
 
 func sendVerificationEmail(ctx *gin.Context, to string, link string) error {

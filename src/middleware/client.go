@@ -26,12 +26,10 @@ func ClientMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		isProtected := false
-		for _, protectedPath := range ProtectedPaths {
-			if strings.HasPrefix(urlPath, protectedPath) {
-				isProtected = true
-				break
-			}
+		isProtected := IsProtectedPaths(urlPath)
+		if !isProtected {
+			c.Next()
+			return
 		}
 
 		secret := c.GetHeader("Authorization")

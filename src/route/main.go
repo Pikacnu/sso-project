@@ -10,6 +10,7 @@ import (
 	. "sso-server/src/route/api"
 	. "sso-server/src/route/auth"
 	. "sso-server/src/route/clients"
+	. "sso-server/src/route/frontend"
 	. "sso-server/src/route/permissions"
 	. "sso-server/src/route/roles"
 	. "sso-server/src/route/scopes"
@@ -34,6 +35,7 @@ func StartWebServer() {
 		RegisterScopeRoutes,
 		RegisterUserRoutes,
 		RegistrerWellKnownRoutes,
+		RegisterFrontendRoutes,
 	}
 
 	// load Config
@@ -50,7 +52,6 @@ func StartWebServer() {
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	router.GET("/health", healthCheckHandler)
-	router.GET("/", serviceInfoHandler)
 
 	for _, register := range routes {
 		register(router)

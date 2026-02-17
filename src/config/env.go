@@ -46,7 +46,7 @@ func NewEnvFromEnv() *Env {
 		Hostname:                getEnv("HOSTNAME", "localhost"),
 		FrontendURL:             getEnv("FRONTEND_URL", "http://localhost:5173"),
 		Debug:                   getEnvBool("DEBUG", "false"),
-		DatabaseURL:             getEnv("DATABASE_URL", "postgres://user:pass@localhost:5432/sso_db"),
+		DatabaseURL:             getEnv("DATABASE_URL", "postgres://user:pass@localhost:5434/sso_db?sslmode=disable"),
 		GoogleClientID:          getEnv("GOOGLE_CLIENT_ID", "your-google-client-id"),
 		GoogleClientSecret:      getEnv("GOOGLE_CLIENT_SECRET", "your-google-client-secret"),
 		DiscordClientID:         getEnv("DISCORD_CLIENT_ID", "your-discord-client-id"),

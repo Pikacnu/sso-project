@@ -33,4 +33,7 @@ func RegisterAuthRoutes(router *gin.Engine) {
 	// Email verification routes
 	routerGroup.POST("/verify-email/request", requestEmailVerificationHandler)
 	routerGroup.GET("/verify-email", verifyEmailHandler)
+	// Email auth routes
+	routerGroup.POST("/email/register", emailRegisterHandler)
+	routerGroup.POST("/email/login", emailLoginHandler)
 }

@@ -7,7 +7,6 @@ import (
 	"sso-server/ent/generated/session"
 	"sso-server/src/auth"
 	dbpkg "sso-server/src/db"
-	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -23,13 +22,7 @@ func SessionMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		isProtected := false
-		for _, protectedPath := range ProtectedPaths {
-			if strings.HasPrefix(urlPath, protectedPath) {
-				isProtected = true
-				break
-			}
-		}
+		isProtected := IsProtectedPaths(urlPath)
 
 		if !isProtected {
 			c.Next()

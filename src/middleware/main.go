@@ -29,6 +29,27 @@ func IsPublicPath(path string) bool {
 	return false
 }
 
+func IsProtectedPaths(path string) bool {
+	for _, protectedPath := range ProtectedPaths {
+		if strings.HasPrefix(path, protectedPath) {
+			return true
+		}
+	}
+	return false
+}
+
+func IsAllowAccessByAnyone(path string) bool {
+	isPublic := IsPublicPath(path)
+	if isPublic {
+		return true
+	}
+	isProtected := IsProtectedPaths(path)
+	if !isProtected {
+		return true
+	}
+	return false
+}
+
 func RegistryMiddleware(router *gin.Engine) {
 	middlewares := []gin.HandlerFunc{
 		gin.Logger(),
