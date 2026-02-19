@@ -23,6 +23,7 @@ func (Scope) Fields() []ent.Field {
 		field.Time("updated_at").Default(time.Now).UpdateDefault(time.Now),
 		field.UUID("client_id", uuid.Nil),
 		field.String("key"),
+		field.String("description").Optional().Nillable(),
 		field.Bool("is_external").Default(false),
 		field.String("external_endpoint").Optional().Nillable(),
 		field.String("external_method").Optional().Nillable(),

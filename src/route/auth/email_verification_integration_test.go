@@ -20,7 +20,7 @@ func TestEmailVerificationFlow(t *testing.T) {
 	defer func() { db.Client = _db }()
 
 	ctx := context.Background()
-	cleanDB(ctx, client)
+	cleanDB(t, client)
 
 	username := "verifyuser-" + uuid.New().String()[:8]
 	userEnt, err := client.User.Create().

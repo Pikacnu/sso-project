@@ -16,6 +16,7 @@ type Env struct {
 	FrontendURL             string `json:"frontend_url"`
 	Debug                   bool   `json:"debug"`
 	DatabaseURL             string `json:"database_url"`
+	IsSQLite                bool   `json:"is_sqlite"`
 	GoogleClientID          string `json:"google_client_id"`
 	GoogleClientSecret      string `json:"google_client_secret"`
 	DiscordClientID         string `json:"discord_client_id"`
@@ -41,24 +42,32 @@ func NewEnvFromEnv() *Env {
 		return SystemEnv
 	}
 	SystemEnv = &Env{
-		AppName:                 getEnv("APP_NAME", "sso-server"),
-		Port:                    getEnv("PORT", "8080"),
-		Hostname:                getEnv("HOSTNAME", "localhost"),
-		FrontendURL:             getEnv("FRONTEND_URL", "http://localhost:5173"),
-		Debug:                   getEnvBool("DEBUG", "false"),
-		DatabaseURL:             getEnv("DATABASE_URL", "postgres://user:pass@localhost:5434/sso_db?sslmode=disable"),
-		GoogleClientID:          getEnv("GOOGLE_CLIENT_ID", "your-google-client-id"),
-		GoogleClientSecret:      getEnv("GOOGLE_CLIENT_SECRET", "your-google-client-secret"),
-		DiscordClientID:         getEnv("DISCORD_CLIENT_ID", "your-discord-client-id"),
-		DiscordClientSecret:     getEnv("DISCORD_CLIENT_SECRET", "your-discord-client-secret"),
-		JWTSecret:               getEnv("JWT_SECRET", "your-jwt-secret"),
-		ConnectionString:        getEnv("CONNECTION_STRING", "your-connection-string"),
-		OpenIDKeyExpireDays:     getEnvInt("OPENID_KEY_EXPIRE_DAYS", 30),
-		EmailFrom:               getEnv("EMAIL_FROM", "no-reply@example.com"),
-		EmailSMTPHost:           getEnv("EMAIL_SMTP_HOST", ""),
-		EmailSMTPPort:           getEnvInt("EMAIL_SMTP_PORT", 587),
-		EmailSMTPUser:           getEnv("EMAIL_SMTP_USER", ""),
-		EmailSMTPPassword:       getEnv("EMAIL_SMTP_PASSWORD", ""),
+		// General settings
+		AppName:          getEnv("APP_NAME", "sso-server"),
+		Port:             getEnv("PORT", "8080"),
+		Hostname:         getEnv("HOSTNAME", "localhost"),
+		FrontendURL:      getEnv("FRONTEND_URL", "http://localhost:5173"),
+		Debug:            getEnvBool("DEBUG", "false"),
+		ConnectionString: getEnv("CONNECTION_STRING", ""),
+		IsSQLite:         getEnvBool("DB_USE_SQLITE", "false"),
+
+		// OAuth client IDs and secrets
+		GoogleClientID:      getEnv("GOOGLE_CLIENT_ID", "your-google-client-id"),
+		GoogleClientSecret:  getEnv("GOOGLE_CLIENT_SECRET", "your-google-client-secret"),
+		DiscordClientID:     getEnv("DISCORD_CLIENT_ID", "your-discord-client-id"),
+		DiscordClientSecret: getEnv("DISCORD_CLIENT_SECRET", "your-discord-client-secret"),
+		// Email configuration
+		EmailFrom:         getEnv("EMAIL_FROM", "no-reply@example.com"),
+		EmailSMTPHost:     getEnv("EMAIL_SMTP_HOST", ""),
+		EmailSMTPPort:     getEnvInt("EMAIL_SMTP_PORT", 587),
+		EmailSMTPUser:     getEnv("EMAIL_SMTP_USER", ""),
+		EmailSMTPPassword: getEnv("EMAIL_SMTP_PASSWORD", ""),
+
+		// JWT configuration
+		JWTSecret:           getEnv("JWT_SECRET", "your-jwt-secret"),
+		OpenIDKeyExpireDays: getEnvInt("OPENID_KEY_EXPIRE_DAYS", 30),
+
+		// Rate limiting and caching
 		RateLimitPerMinute:      getEnvInt("RATE_LIMIT_PER_MINUTE", 100),
 		ExternalCacheTTLSeconds: getEnvInt("EXTERNAL_CACHE_TTL_SECONDS", 300),
 	}

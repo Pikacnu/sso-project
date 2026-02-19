@@ -25,7 +25,7 @@ func TestEmailRegisterHandler_CreatesUser(t *testing.T) {
 	defer func() { db.Client = _db }()
 
 	ctx := context.Background()
-	cleanDB(ctx, client)
+	cleanDB(t, client)
 
 	r := setupRouter()
 	r.POST("/auth/email/register", emailRegisterHandler)
@@ -62,7 +62,7 @@ func TestEmailLoginHandler_UnverifiedSendsVerification(t *testing.T) {
 	defer func() { db.Client = _db }()
 
 	ctx := context.Background()
-	cleanDB(ctx, client)
+	cleanDB(t, client)
 
 	hash, err := auth.HashPassword("passw0rd!")
 	if err != nil {
@@ -129,7 +129,7 @@ func TestVerifyEmailHandler_ReturnToken(t *testing.T) {
 	}()
 
 	ctx := context.Background()
-	cleanDB(ctx, client)
+	cleanDB(t, client)
 
 	token, err := auth.GenerateSecureToken()
 	if err != nil {

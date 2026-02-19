@@ -2,7 +2,6 @@ package auth
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -12,7 +11,6 @@ import (
 	"time"
 
 	ent "sso-server/ent/generated"
-	enttest "sso-server/ent/generated/enttest"
 	"sso-server/src/auth"
 	"sso-server/src/config"
 	"sso-server/src/db"
@@ -20,40 +18,12 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
-	_ "github.com/lib/pq"
 )
-
-const defaultTestDSN = "postgres://user:pass@127.0.0.1:5433/sso_test?sslmode=disable"
-
-func openTestDB(t *testing.T) *ent.Client {
-	t.Helper()
-	env := config.NewEnvFromEnv()
-	dsn := env.ConnectionString
-	if dsn == "" || dsn == "your-connection-string" {
-		dsn = env.DatabaseURL
-	}
-	if dsn == "" || dsn == "postgres://user:pass@localhost:5432/sso_db" {
-		dsn = defaultTestDSN
-	}
-
-	sqlDB, err := sql.Open("postgres", dsn)
-	if err != nil {
-		t.Skipf("skip integration test: cannot open db: %v", err)
-	}
-	if err := sqlDB.Ping(); err != nil {
-		_ = sqlDB.Close()
-		t.Skipf("skip integration test: db not reachable: %v", err)
-	}
-	_ = sqlDB.Close()
-
-	client := enttest.Open(t, "postgres", dsn)
-	return client
-}
 
 func seedUserInfoData(t *testing.T, client *ent.Client, tokenString string, scope string, emailVerified bool) (uuid.UUID, uuid.UUID) {
 	t.Helper()
 	ctx := context.Background()
-	cleanDB(ctx, client)
+	cleanDB(t, client)
 
 	userID := uuid.New()
 	userEnt, err := client.User.Create().

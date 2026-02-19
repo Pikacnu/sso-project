@@ -16,6 +16,7 @@ import (
 
 type ScopeRegisterRequest struct {
 	Scope            string         `json:"scope"`
+	Description      string         `json:"description"`
 	IsExternal       bool           `json:"is_external"`
 	ExternalEndpoint string         `json:"external_endpoint"`
 	ExternalMethod   string         `json:"external_method"`
@@ -29,6 +30,7 @@ type ScopeResponse struct {
 	ID               string `json:"id"`
 	ClientID         string `json:"client_id"`
 	Key              string `json:"key"`
+	Description      string `json:"description,omitempty"`
 	CreatedAt        string `json:"created_at"`
 	IsExternal       bool   `json:"is_external"`
 	ExternalEndpoint string `json:"external_endpoint,omitempty"`
@@ -106,6 +108,9 @@ func registerScopeHandler(c *gin.Context) {
 		SetKey(req.Scope).
 		SetIsExternal(req.IsExternal)
 
+	if value := strings.TrimSpace(req.Description); value != "" {
+		builder = builder.SetDescription(value)
+	}
 	if value := strings.TrimSpace(req.ExternalEndpoint); value != "" {
 		builder = builder.SetExternalEndpoint(value)
 	}
@@ -193,6 +198,9 @@ func scopeResponse(scopeEnt *ent.Scope) gin.H {
 		"is_external": scopeEnt.IsExternal,
 	}
 
+	if scopeEnt.Description != nil {
+		response["description"] = *scopeEnt.Description
+	}
 	if scopeEnt.ExternalEndpoint != nil {
 		response["external_endpoint"] = *scopeEnt.ExternalEndpoint
 	}

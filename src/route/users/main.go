@@ -2,6 +2,7 @@ package users
 
 import (
 	"net/http"
+	"sso-server/src/auth"
 	dbpkg "sso-server/src/db"
 	"sso-server/src/middleware"
 
@@ -16,12 +17,19 @@ type CreateUserRequest struct {
 	Email    string  `json:"email" binding:"required"`
 	Username string  `json:"username" binding:"required"`
 	Avatar   *string `json:"avatar"`
+	Password *string `json:"password"`
 }
 
 type UpdateUserRequest struct {
 	Email    *string `json:"email"`
 	Username *string `json:"username"`
 	Avatar   *string `json:"avatar"`
+	Password *string `json:"password"`
+}
+
+type ChangePasswordRequest struct {
+	OldPassword string `json:"old_password" binding:"required"`
+	NewPassword string `json:"new_password" binding:"required"`
 }
 
 type AssignRolesRequest struct {
@@ -36,6 +44,7 @@ func RegisterUserRoutes(router *gin.Engine) {
 	group.GET("/:id", getUserHandler)
 	group.PUT("/:id", updateUserHandler)
 	group.DELETE("/:id", deleteUserHandler)
+	group.PUT("/:id/password", changePasswordHandler)
 	group.POST("/:id/roles", assignRolesHandler)
 	group.GET("/:id/roles", getUserRolesHandler)
 }
@@ -125,6 +134,15 @@ func createUserHandler(c *gin.Context) {
 		builder.SetAvatar(*req.Avatar)
 	}
 
+	if req.Password != nil && *req.Password != "" {
+		hash, err := auth.HashPassword(*req.Password)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password"})
+			return
+		}
+		builder.SetPassword(hash)
+	}
+
 	u, err := builder.Save(ctx)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
@@ -172,6 +190,14 @@ func updateUserHandler(c *gin.Context) {
 	if req.Avatar != nil {
 		builder.SetAvatar(*req.Avatar)
 	}
+	if req.Password != nil && *req.Password != "" {
+		hash, err := auth.HashPassword(*req.Password)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password"})
+			return
+		}
+		builder.SetPassword(hash)
+	}
 
 	u, err := builder.Save(ctx)
 	if err != nil {
@@ -216,6 +242,71 @@ func deleteUserHandler(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "User deleted successfully"})
+}
+
+// @Summary Change user password
+// @Description Change password for a user (admin can change any user, users can change own)
+// @Tags users
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param id path string true "User ID (UUID)"
+// @Param body body ChangePasswordRequest true "Password change request"
+// @Success 200 {object} map[string]string
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /users/{id}/password [put]
+func changePasswordHandler(c *gin.Context) {
+	userUUID, ok := parseUserID(c)
+	if !ok {
+		return
+	}
+
+	var req ChangePasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Old password and new password are required"})
+		return
+	}
+
+	if req.OldPassword == "" || req.NewPassword == "" {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Old password and new password are required"})
+		return
+	}
+
+	ctx := c.Request.Context()
+	u, err := dbpkg.Client.User.Get(ctx, userUUID)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		} else {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to query user"})
+		}
+		return
+	}
+
+	// Verify old password
+	if u.Password == nil || !auth.CheckPasswordHash(req.OldPassword, *u.Password) {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid old password"})
+		return
+	}
+
+	// Hash new password
+	newHash, err := auth.HashPassword(req.NewPassword)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password"})
+		return
+	}
+
+	// Update password
+	updatedUser, err := dbpkg.Client.User.UpdateOneID(userUUID).SetPassword(newHash).Save(ctx)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to update password"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Password changed successfully", "user": userResponse(updatedUser)})
 }
 
 // @Summary Assign roles to user

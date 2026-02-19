@@ -10,7 +10,44 @@ services:
       - "5434:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/01-init.sql
     restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d sso_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sso-app
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # Database configuration
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: user
+      DB_PASSWORD: pass
+      DB_NAME: sso_db
+      # Application configuration
+      ENVIRONMENT: production
+      LOG_LEVEL: info
+      PORT: 8080
+      JWT_SECRET: ${JWT_SECRET:-your-secret-key-change-in-production}
+      RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-60}
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
 
 volumes:
   postgres_data:

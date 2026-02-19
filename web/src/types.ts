@@ -40,3 +40,18 @@ export interface Permission {
   created_at: string;
   updated_at: string;
 }
+
+export interface Scope {
+  id: string;
+  key: string;
+  description?: string;
+  is_external: boolean;
+  external_endpoint?: string;
+  external_method?: string;
+  auth_type?: string;
+  auth_secret_env?: string;
+  json_schema?: string;
+  data?: string;
+  created_at: string;
+  updated_at: string;
+}

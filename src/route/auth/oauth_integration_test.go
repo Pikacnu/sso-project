@@ -16,23 +16,10 @@ import (
 	"github.com/google/uuid"
 )
 
-func cleanDB(ctx context.Context, client *ent.Client) {
-	_, _ = client.RefreshToken.Delete().Exec(ctx)
-	_, _ = client.AccessToken.Delete().Exec(ctx)
-	_, _ = client.AuthorizationCode.Delete().Exec(ctx)
-	_, _ = client.OAuthFlow.Delete().Exec(ctx)
-	_, _ = client.Session.Delete().Exec(ctx)
-	_, _ = client.SocialAccount.Delete().Exec(ctx)
-	_, _ = client.Scope.Delete().Exec(ctx)
-	_, _ = client.OAuthClient.Delete().Exec(ctx)
-	_, _ = client.User.Delete().Exec(ctx)
-	_, _ = client.OpenIDKey.Delete().Exec(ctx)
-}
-
 func seedAuthorizeData(t *testing.T, client *ent.Client) (string, string) {
 	t.Helper()
 	ctx := context.Background()
-	cleanDB(ctx, client)
+	cleanDB(t, client)
 
 	clientUUID := uuid.New()
 	clientID := clientUUID.String()
@@ -69,7 +56,7 @@ func seedAuthorizeData(t *testing.T, client *ent.Client) (string, string) {
 func seedTokenFlowData(t *testing.T, client *ent.Client, code string, codeChallenge string, method string) (string, string, string) {
 	t.Helper()
 	ctx := context.Background()
-	cleanDB(ctx, client)
+	cleanDB(t, client)
 
 	userID := uuid.New()
 	username := "testuser-" + uuid.New().String()[:8]
@@ -124,7 +111,7 @@ func pointerString(value string) *string {
 func seedAccessTokenData(t *testing.T, client *ent.Client, token string, expiresAt time.Time) {
 	t.Helper()
 	ctx := context.Background()
-	cleanDB(ctx, client)
+	cleanDB(t, client)
 
 	userID := uuid.New()
 	username := "testuser-" + uuid.New().String()[:8]
@@ -304,7 +291,7 @@ func TestTokenHandler_RefreshTokenSuccess(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	cleanDB(ctx, client)
+	cleanDB(t, client)
 
 	userID := uuid.New()
 	username := "testuser-" + uuid.New().String()[:8]
@@ -465,7 +452,7 @@ func TestLogoutHandler_RevokesSession(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	cleanDB(ctx, client)
+	cleanDB(t, client)
 
 	userID := uuid.New()
 	username := "testuser-" + uuid.New().String()[:8]

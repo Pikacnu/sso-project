@@ -9,6 +9,7 @@ import (
 
 	entsql "entgo.io/ent/dialect/sql"
 	_ "github.com/lib/pq"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 var Client *ent.Client
@@ -36,14 +37,28 @@ func ApplyMigrations(client *ent.Client) error {
 }
 
 func InitDB() {
-	drv, err := entsql.Open("postgres", cfg.ConnectionString)
-	if err != nil {
-		panic("failed to connect database: " + err.Error())
+	if cfg.IsSQLite {
+		drv, err := entsql.Open("sqlite3", cfg.ConnectionString)
+		if err != nil {
+			panic("failed to connect database: " + err.Error())
+		}
+		client := ent.NewClient(ent.Driver(drv))
+		err = ApplyMigrations(client)
+		if err != nil {
+			panic("failed to apply migrations: " + err.Error())
+		}
+		Client = client
+	} else {
+		drv, err := entsql.Open("postgres", cfg.ConnectionString)
+		if err != nil {
+			panic("failed to connect database: " + err.Error())
+		}
+		client := ent.NewClient(ent.Driver(drv))
+		err = ApplyMigrations(client)
+		if err != nil {
+			panic("failed to apply migrations: " + err.Error())
+		}
+		Client = client
 	}
-	client := ent.NewClient(ent.Driver(drv))
-	err = ApplyMigrations(client)
-	if err != nil {
-		panic("failed to apply migrations: " + err.Error())
-	}
-	Client = client
+
 }
