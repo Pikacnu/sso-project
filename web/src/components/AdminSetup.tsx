@@ -79,7 +79,7 @@ export default function AdminSetup() {
   };
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-gradient-to-br from-amber-50 to-white px-4 dark:from-slate-950 dark:to-slate-900">
+    <main className="flex min-h-screen items-center justify-center bg-liner-to-br from-amber-50 to-white px-4 dark:from-slate-950 dark:to-slate-900">
       <div className="w-full max-w-md">
         <div className="rounded-3xl border border-amber-200/70 bg-white/95 p-8 shadow-lg dark:border-slate-800 dark:bg-slate-900/80">
           <div className="mb-6 text-center">

@@ -66,7 +66,7 @@ func emailRegisterHandler(ctx *gin.Context) {
 		ctx.AbortWithStatusJSON(http.StatusConflict, gin.H{"error": "conflict", "error_description": "Email already registered"})
 		return
 	}
-	if err != nil && !ent.IsNotFound(err) {
+	if !ent.IsNotFound(err) {
 		ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "server_error", "error_description": "Failed to query user"})
 		return
 	}
