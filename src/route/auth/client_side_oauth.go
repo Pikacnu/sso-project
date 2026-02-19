@@ -44,8 +44,16 @@ func loginHandler(ctx *gin.Context) {
 	switch platform {
 	case "discord":
 		OAuthConfig = providors.DiscordOAuthConfig
+		if OAuthConfig.ClientID == "" {
+			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Discord OAuth is not configured"})
+			return
+		}
 	case "google":
 		OAuthConfig = providors.GoogleOAuthConfig
+		if OAuthConfig.ClientID == "" {
+			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Google OAuth is not configured"})
+			return
+		}
 	default:
 		ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Unsupported platform"})
 		return
@@ -108,8 +116,16 @@ func callBackHandler(ctx *gin.Context) {
 	switch platform {
 	case "discord":
 		OAuthConfig = providors.DiscordOAuthConfig
+		if OAuthConfig.ClientID == "" {
+			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Discord OAuth is not configured"})
+			return
+		}
 	case "google":
 		OAuthConfig = providors.GoogleOAuthConfig
+		if OAuthConfig.ClientID == "" {
+			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Google OAuth is not configured"})
+			return
+		}
 	default:
 		ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Unsupported platform"})
 		return

@@ -1,4 +1,4 @@
 .env
-*.md
+/docs/*.md
 ent/generated/*
 *.exe
