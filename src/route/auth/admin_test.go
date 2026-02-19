@@ -245,7 +245,7 @@ func TestAdminInit_InvalidJSON(t *testing.T) {
 func TestAdminInit_CreatesDefaultPermissions(t *testing.T) {
 	client := openTestDB(t)
 	defer client.Close()
-	
+
 	// Clean DB first
 	ctx := context.Background()
 	client.RefreshToken.Delete().Exec(ctx)

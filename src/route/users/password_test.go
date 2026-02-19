@@ -60,7 +60,7 @@ func createTestAdminUser(t *testing.T, client *ent.Client) uuid.UUID {
 	// Create admin user with unique username
 	adminID := uuid.New()
 	username := "testadmin-" + uuid.New().String()[:8]
-	
+
 	// Create user first, then add roles
 	user, err := client.User.Create().
 		SetID(adminID).
