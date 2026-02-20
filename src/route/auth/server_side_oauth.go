@@ -222,7 +222,7 @@ func authorizeHandler(ctx *gin.Context) {
 	}
 
 	flowIDStr := flowID.String()
-	ctx.SetCookie("OAuth_ID", flowIDStr, int(5*time.Minute/time.Second), "/", "", false, true)
+	ctx.SetCookie("OAuth_ID", flowIDStr, int(5*time.Minute/time.Second), "/", "", true, true)
 
 	// If no provider specified, redirect to frontend login page
 	if providor == "" {
@@ -354,7 +354,7 @@ func authCallbackHandler(ctx *gin.Context) {
 			return
 		}
 
-		ctx.SetCookie("session_token", tokenString, int(time.Hour*24*7/time.Second), "/", "", false, true)
+		ctx.SetCookie("session_token", tokenString, int(time.Hour*24*7/time.Second), "/", "", true, true)
 		// Redirect to frontend with session established
 		ctx.Redirect(http.StatusTemporaryRedirect, oauthFlowEnt.RedirectURI)
 		return

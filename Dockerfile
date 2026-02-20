@@ -39,6 +39,9 @@ COPY --from=backend-builder /app/sso-server .
 # Copy templates from builder (if needed for email templates)
 COPY --from=backend-builder /app/templates ./templates
 
+# Copy frontend assets from builder
+COPY --from=backend-builder /app/web/dist ./web/dist
+
 # Expose port
 EXPOSE 8080
 

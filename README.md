@@ -58,12 +58,47 @@ go run main.go
 ### 4) Run frontend (optional)
 See [web/README.md](web/README.md) for the web UI dev server.
 
-## Useful Docs
-- [docs/QUICK_START.md](docs/QUICK_START.md)
-- [docs/QUICK_REFERENCE.md](docs/QUICK_REFERENCE.md)
-- [docs/TEST_SUITE.md](docs/TEST_SUITE.md)
+## Admin Setup
+
+Initialize the admin account on first run:
+
+```bash
+curl -X POST http://localhost:8080/auth/admin/init \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "admin@example.com",
+    "username": "admin",
+    "password": "SecurePassword123!"
+  }'
+```
+
+**Response (success):**
+```json
+{
+  "success": true,
+  "message": "Admin account initialized successfully",
+  "admin_user": {
+    "id": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+    "email": "admin@example.com",
+    "username": "admin"
+  },
+  "admin_role": {
+    "id": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+    "name": "admin"
+  }
+}
+```
+
+**Automatically created:**
+- ✅ Admin role with full system access
+- ✅ Admin user (email pre-verified)
+- ✅ 5 default permissions (oauth:register, users:manage, roles:manage, scopes:manage, permissions:manage)
+- ✅ All permissions assigned to admin role
+
+Once initialized, access the admin UI at: `http://localhost:8080/panel/clients`
 
 ## API Endpoints
 - Health: `GET /health`
+- Admin Init: `POST /auth/admin/init`
 - OIDC Discovery: `GET /.well-known/openid-configuration`
 - Swagger UI: `GET /swagger/index.html`

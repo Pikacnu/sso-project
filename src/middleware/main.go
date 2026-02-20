@@ -9,6 +9,10 @@ import (
 var ProtectedPaths = []string{
 	"/api/",
 	"/user/",
+	"/panel",
+	"/permissions",
+	"/users",
+	"/roles",
 	"/clients",
 }
 
@@ -54,6 +58,7 @@ func RegistryMiddleware(router *gin.Engine) {
 	middlewares := []gin.HandlerFunc{
 		gin.Logger(),
 		gin.Recovery(),
+		SecurityHeadersMiddleware(),
 		//ConfigMiddleware(),
 		RateLimitMiddleware(),
 		SessionMiddleware(),

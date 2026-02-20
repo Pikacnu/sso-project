@@ -64,13 +64,13 @@ func loginHandler(ctx *gin.Context) {
 
 	// If flow_id is provided (from frontend), set it as OAuth_ID cookie
 	if flowID != "" {
-		ctx.SetCookie("OAuth_ID", flowID, 300, "/", "", false, true)
+		ctx.SetCookie("OAuth_ID", flowID, 300, "/", "", true, true)
 	}
 
 	CSRFToken := uuid.New().String()
 	url := OAuthConfig.AuthCodeURL(CSRFToken)
-	ctx.SetCookie("oauth_csrf_token", CSRFToken, 300, "/", "", false, true)
-	ctx.SetCookie("redirect_url", redirectURL, 300, "/", "", false, true)
+	ctx.SetCookie("oauth_csrf_token", CSRFToken, 300, "/", "", true, true)
+	ctx.SetCookie("redirect_url", redirectURL, 300, "/", "", true, true)
 	ctx.Redirect(http.StatusTemporaryRedirect, url)
 }
 
@@ -110,7 +110,7 @@ func callBackHandler(ctx *gin.Context) {
 		return
 	}
 
-	ctx.SetCookie("oauth_csrf_token", "", -1, "/", "", false, true)
+	ctx.SetCookie("oauth_csrf_token", "", -1, "/", "", true, true)
 
 	var OAuthConfig *oauth2.Config
 	switch platform {
@@ -270,7 +270,7 @@ func callBackHandler(ctx *gin.Context) {
 		return
 	}
 
-	ctx.SetCookie("session_token", tokenString, int(time.Hour*24*7/time.Second), "/", "", false, true)
+	ctx.SetCookie("session_token", tokenString, int(time.Hour*24*7/time.Second), "/", "", true, true)
 	if redirectURL != "" {
 		ctx.Redirect(http.StatusTemporaryRedirect, redirectURL)
 	} else {

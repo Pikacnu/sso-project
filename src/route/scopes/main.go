@@ -7,7 +7,9 @@ import (
 	"strings"
 
 	ent "sso-server/ent/generated"
+	"sso-server/ent/generated/role"
 	"sso-server/ent/generated/scope"
+	"sso-server/ent/generated/user"
 	dbpkg "sso-server/src/db"
 
 	"github.com/gin-gonic/gin"
@@ -45,6 +47,13 @@ func RegisterScopeRoutes(router *gin.Engine) {
 	routerGroup := router.Group("/scopes")
 	routerGroup.POST("/register", registerScopeHandler)
 	routerGroup.GET("", listScopesHandler)
+
+	// Admin routes for scope management
+	adminGroup := router.Group("/admin/scopes")
+	adminGroup.Use(requireAdminRole())
+	adminGroup.GET("", adminListScopesHandler)
+	adminGroup.POST("", adminCreateScopeHandler)
+	adminGroup.DELETE("/:id", adminDeleteScopeHandler)
 }
 
 // @Summary Register scope
@@ -61,15 +70,46 @@ func RegisterScopeRoutes(router *gin.Engine) {
 // @Failure 500 {object} map[string]string
 // @Router /scopes/register [post]
 func registerScopeHandler(c *gin.Context) {
-	clientID, ok := c.Get("client_id")
-	if !ok {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Missing client context"})
-		return
+	var clientUUID uuid.UUID
+	var ctxBg = context.Background()
+	
+	// Try to get client_id from context (client authentication)
+	if clientID, ok := c.Get("client_id"); ok {
+		if id, ok := clientID.(uuid.UUID); ok {
+			clientUUID = id
+		}
 	}
-	clientUUID, ok := clientID.(uuid.UUID)
-	if !ok {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid client context"})
-		return
+	
+	// If no client context, check for admin/scopes role (user authentication)
+	if clientUUID == uuid.Nil {
+		userID, ok := c.Get("user_id")
+		if !ok {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Missing client or user context"})
+			return
+		}
+		
+		userUUID, ok := userID.(uuid.UUID)
+		if !ok {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid user context"})
+			return
+		}
+		
+		// Verify user has admin or scopes management role
+		hasRole, err := dbpkg.Client.User.Query().
+			Where(user.IDEQ(userUUID)).
+			QueryRoles().
+			Where(role.NameEQ("admin")).
+			Exist(ctxBg)
+		
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify permissions"})
+			return
+		}
+		
+		if !hasRole {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "User does not have scopes management permission"})
+			return
+		}
 	}
 
 	var req ScopeRegisterRequest
@@ -88,8 +128,6 @@ func registerScopeHandler(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "external_endpoint is required for external scopes"})
 		return
 	}
-
-	ctxBg := context.Background()
 	exists, err := dbpkg.Client.Scope.Query().Where(
 		scope.ClientIDEQ(clientUUID),
 		scope.KeyEQ(req.Scope),
@@ -156,15 +194,58 @@ func registerScopeHandler(c *gin.Context) {
 // @Failure 500 {object} map[string]string
 // @Router /scopes [get]
 func listScopesHandler(c *gin.Context) {
-	clientID, ok := c.Get("client_id")
-	if !ok {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Missing client context"})
-		return
+	var clientUUID uuid.UUID
+	var ctxBg = context.Background()
+	
+	// Try to get client_id from context (client authentication)
+	if clientID, ok := c.Get("client_id"); ok {
+		if id, ok := clientID.(uuid.UUID); ok {
+			clientUUID = id
+		}
 	}
-	clientUUID, ok := clientID.(uuid.UUID)
-	if !ok {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid client context"})
-		return
+	
+	// If no client context, check for admin role (user authentication)
+	if clientUUID == uuid.Nil {
+		userID, ok := c.Get("user_id")
+		if !ok {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Missing client or user context"})
+			return
+		}
+		
+		userUUID, ok := userID.(uuid.UUID)
+		if !ok {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid user context"})
+			return
+		}
+		
+		// Verify user has admin role
+		hasRole, err := dbpkg.Client.User.Query().
+			Where(user.IDEQ(userUUID)).
+			QueryRoles().
+			Where(role.NameEQ("admin")).
+			Exist(ctxBg)
+		
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify permissions"})
+			return
+		}
+		
+		if !hasRole {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "User does not have admin permission"})
+			return
+		}
+		
+		// For admin user, get client_id from query parameter
+		if requested := strings.TrimSpace(c.Query("client_id")); requested != "" {
+			if requestedUUID, err := uuid.Parse(requested); err == nil {
+				clientUUID = requestedUUID
+			}
+		}
+		
+		if clientUUID == uuid.Nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "client_id is required in query parameter for admin users"})
+			return
+		}
 	}
 
 	if requested := strings.TrimSpace(c.Query("client_id")); requested != "" {
@@ -173,8 +254,6 @@ func listScopesHandler(c *gin.Context) {
 			return
 		}
 	}
-
-	ctxBg := context.Background()
 	scopes, err := dbpkg.Client.Scope.Query().Where(scope.ClientIDEQ(clientUUID)).All(ctxBg)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to query scopes"})
@@ -221,4 +300,225 @@ func scopeResponse(scopeEnt *ent.Scope) gin.H {
 	}
 
 	return response
+}
+
+// requireAdminRole middleware to check if user has admin role
+func requireAdminRole() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID, ok := c.Get("user_id")
+		if !ok {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Missing user context"})
+			return
+		}
+
+		userUUID, ok := userID.(uuid.UUID)
+		if !ok {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid user context"})
+			return
+		}
+
+		ctxBg := context.Background()
+		hasRole, err := dbpkg.Client.User.Query().
+			Where(user.IDEQ(userUUID)).
+			QueryRoles().
+			Where(role.NameEQ("admin")).
+			Exist(ctxBg)
+
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify permissions"})
+			return
+		}
+
+		if !hasRole {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "User does not have admin permission"})
+			return
+		}
+
+		c.Next()
+	}
+}
+
+// @Summary List all scopes (admin)
+// @Tags admin/scopes
+// @Produce json
+// @Param client_id query string false "Filter by client ID"
+// @Success 200 {array} ScopeResponse
+// @Failure 401 {object} map[string]string
+// @Failure 403 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /admin/scopes [get]
+func adminListScopesHandler(c *gin.Context) {
+	ctxBg := context.Background()
+
+	// Build query
+	query := dbpkg.Client.Scope.Query()
+
+	// Filter by client_id if provided
+	if clientIDStr := strings.TrimSpace(c.Query("client_id")); clientIDStr != "" {
+		if clientUUID, err := uuid.Parse(clientIDStr); err == nil {
+			query = query.Where(scope.ClientIDEQ(clientUUID))
+		}
+	}
+
+	scopes, err := query.All(ctxBg)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to query scopes"})
+		return
+	}
+
+	response := make([]gin.H, 0, len(scopes))
+	for _, scopeEnt := range scopes {
+		response = append(response, scopeResponse(scopeEnt))
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
+// @Summary Create scope (admin)
+// @Tags admin/scopes
+// @Accept json
+// @Produce json
+// @Param body body ScopeRegisterRequest true "Scope with client_id in json_schema"
+// @Success 200 {object} ScopeResponse
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
+// @Failure 403 {object} map[string]string
+// @Failure 409 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /admin/scopes [post]
+func adminCreateScopeHandler(c *gin.Context) {
+	var req ScopeRegisterRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
+		return
+	}
+
+	req.Scope = strings.TrimSpace(req.Scope)
+	if req.Scope == "" {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Scope is required"})
+		return
+	}
+
+	// Get client_id from json_schema field (admin panel passes it there)
+	var clientUUID uuid.UUID
+	if clientIDVal, ok := req.JSONSchema["client_id"].(string); ok && clientIDVal != "" {
+		if id, err := uuid.Parse(clientIDVal); err == nil {
+			clientUUID = id
+		}
+	}
+
+	if clientUUID == uuid.Nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "client_id is required in json_schema"})
+		return
+	}
+
+	if req.IsExternal && strings.TrimSpace(req.ExternalEndpoint) == "" {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "external_endpoint is required for external scopes"})
+		return
+	}
+
+	ctxBg := context.Background()
+	exists, err := dbpkg.Client.Scope.Query().Where(
+		scope.ClientIDEQ(clientUUID),
+		scope.KeyEQ(req.Scope),
+	).Exist(ctxBg)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to query scopes"})
+		return
+	}
+	if exists {
+		c.AbortWithStatusJSON(http.StatusConflict, gin.H{"error": "Scope already exists"})
+		return
+	}
+
+	builder := dbpkg.Client.Scope.Create().
+		SetClientID(clientUUID).
+		SetKey(req.Scope).
+		SetIsExternal(req.IsExternal)
+
+	if value := strings.TrimSpace(req.Description); value != "" {
+		builder = builder.SetDescription(value)
+	}
+	if value := strings.TrimSpace(req.ExternalEndpoint); value != "" {
+		builder = builder.SetExternalEndpoint(value)
+	}
+	if value := strings.TrimSpace(req.ExternalMethod); value != "" {
+		builder = builder.SetExternalMethod(value)
+	}
+	if value := strings.TrimSpace(req.AuthType); value != "" {
+		builder = builder.SetAuthType(value)
+	}
+	if value := strings.TrimSpace(req.AuthSecretEnv); value != "" {
+		builder = builder.SetAuthSecretEnv(value)
+	}
+	if len(req.JSONSchema) > 1 { // > 1 because client_id is in there
+		// Remove client_id before saving
+		schemaCopy := make(map[string]any)
+		for k, v := range req.JSONSchema {
+			if k != "client_id" {
+				schemaCopy[k] = v
+			}
+		}
+		if len(schemaCopy) > 0 {
+			payload, err := json.Marshal(schemaCopy)
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid json_schema"})
+				return
+			}
+			builder = builder.SetJSONSchema(strings.TrimSpace(string(payload)))
+		}
+	}
+	if value := strings.TrimSpace(req.Data); value != "" {
+		builder = builder.SetData(value)
+	}
+
+	scopeEnt, err := builder.Save(ctxBg)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to create scope"})
+		return
+	}
+
+	c.JSON(http.StatusOK, scopeResponse(scopeEnt))
+}
+
+// @Summary Delete scope (admin)
+// @Tags admin/scopes
+// @Produce json
+// @Param id path string true "Scope ID (UUID)"
+// @Success 200 {object} map[string]string
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
+// @Failure 403 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /admin/scopes/{id} [delete]
+func adminDeleteScopeHandler(c *gin.Context) {
+	idStr := c.Param("id")
+	scopeUUID, err := uuid.Parse(idStr)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid scope ID format"})
+		return
+	}
+
+	ctxBg := context.Background()
+	
+	// Check if scope exists
+	scopeEnt, err := dbpkg.Client.Scope.Get(ctxBg, scopeUUID)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": "Scope not found"})
+		} else {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to query scope"})
+		}
+		return
+	}
+
+	// Delete the scope
+	err = dbpkg.Client.Scope.DeleteOne(scopeEnt).Exec(ctxBg)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete scope"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Scope deleted successfully"})
 }

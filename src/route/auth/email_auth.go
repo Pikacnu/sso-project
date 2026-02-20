@@ -189,16 +189,12 @@ func emailLoginHandler(ctx *gin.Context) {
 		return
 	}
 
-	ctx.SetCookie("session_token", result.Token, int(time.Hour*24*7/time.Second), "/", "", false, true)
+	ctx.SetCookie("session_token", result.Token, int(time.Hour*24*7/time.Second), "/", "", true, true)
+	
+	// Redirect to specified URL or default to home
 	redirectURL := strings.TrimSpace(req.RedirectURL)
-	if redirectURL != "" {
-		ctx.Redirect(http.StatusTemporaryRedirect, redirectURL)
-		return
+	if redirectURL == "" {
+		redirectURL = "/"
 	}
-
-	ctx.JSON(http.StatusOK, gin.H{
-		"access_token": result.Token,
-		"token_type":   "Bearer",
-		"expires_in":   int(time.Until(result.ExpiresAt).Seconds()),
-	})
+	ctx.Redirect(http.StatusTemporaryRedirect, redirectURL)
 }

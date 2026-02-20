@@ -25,6 +25,12 @@ func RegisterFrontendRoutes(router *gin.Engine) {
 	router.GET("/panel/permissions", func(c *gin.Context) {
 		c.File("./web/dist/permissions/index.html")
 	})
+	router.GET("/panel/binding", func(c *gin.Context) {
+		c.File("./web/dist/binding/index.html")
+	})
+	router.GET("/panel/scopes", func(c *gin.Context) {
+		c.File("./web/dist/scopes/index.html")
+	})
 
 	router.GET("/panel", func(c *gin.Context) {
 		c.Redirect(http.StatusTemporaryRedirect, "/panel/clients")

@@ -1,30 +1,10 @@
 ---
 import Layout from "./Layout.astro";
+import Navigation from "../components/Navigation";
 ---
 
 <Layout>
-  <nav class="w-full sticky top-0 z-40 border-b border-amber-100/70 bg-white/90 text-slate-900 backdrop-blur dark:border-slate-800 dark:bg-slate-950/70 dark:text-slate-100">
-    <div class="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-4 px-6 py-4">
-      <div class="flex items-center gap-3">
-        <span class="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-amber-100 text-amber-700 dark:bg-amber-600/20 dark:text-amber-400">
-          SSO
-        </span>
-        <div>
-          <p class="text-sm uppercase tracking-[0.28em] text-amber-600 dark:text-amber-400">Console</p>
-          <h1 class="text-lg font-semibold">SSO Server</h1>
-        </div>
-      </div>
-      <ul class="flex flex-wrap items-center gap-3 text-sm font-semibold">
-        <li><a href="/" class="rounded-full px-3 py-2 text-slate-600 transition hover:bg-amber-50 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800">Home</a></li>
-        <li><a href="/panel/clients" class="rounded-full px-3 py-2 text-slate-600 transition hover:bg-amber-50 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800">Clients</a></li>
-        <li><a href="/panel/users" class="rounded-full px-3 py-2 text-slate-600 transition hover:bg-amber-50 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800">Users</a></li>
-        <li><a href="/panel/roles" class="rounded-full px-3 py-2 text-slate-600 transition hover:bg-amber-50 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800">Roles</a></li>
-        <li><a href="/panel/permissions" class="rounded-full px-3 py-2 text-slate-600 transition hover:bg-amber-50 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800">Permissions</a></li>
-        <li><a href="/scopes" class="rounded-full px-3 py-2 text-slate-600 transition hover:bg-amber-50 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800">Scopes</a></li>
-        <li><a href="/login" class="rounded-full border border-amber-200 px-3 py-2 text-amber-700 transition hover:bg-amber-100 dark:border-amber-600/60 dark:text-amber-300 dark:hover:bg-amber-600/20">Login</a></li>
-      </ul>
-    </div>
-  </nav>
+  <Navigation client:load />
   <main class="w-full flex-1 flex flex-col overflow-y-auto">
     <slot />
   </main>

@@ -9,6 +9,8 @@ import (
 	"testing"
 
 	ent "sso-server/ent/generated"
+	"sso-server/ent/generated/role"
+	"sso-server/ent/generated/scope"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -498,5 +500,266 @@ func TestScopeFields(t *testing.T) {
 
 	if response.AuthType != "oauth2" {
 		t.Fatalf("expected auth_type to be oauth2")
+	}
+}
+
+// setupAdminTestRouter creates a test router with admin user context
+func setupAdminTestRouter(adminUserID uuid.UUID) *gin.Engine {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+
+	// Setup middleware that sets user context (admin)
+	router.Use(func(c *gin.Context) {
+		c.Set("user_id", adminUserID)
+	})
+
+	RegisterScopeRoutes(router)
+	return router
+}
+
+// createTestAdminUser creates an admin user for testing
+func createTestAdminUser(t *testing.T, client *ent.Client, username string) uuid.UUID {
+	t.Helper()
+	ctx := context.Background()
+
+	// Create admin role if not exists
+	roleEnt, err := client.Role.Query().Where(role.NameEQ("admin")).First(ctx)
+	if err != nil {
+		roleEnt, err = client.Role.Create().
+			SetName("admin").
+			SetDescription("Administrator role").
+			Save(ctx)
+		if err != nil {
+			t.Fatalf("failed to create admin role: %v", err)
+		}
+	}
+
+	// Create admin user with unique username
+	userEnt, err := client.User.Create().
+		SetUsername(username).
+		SetEmail(username + "@test.local").
+		SetEmailVerified(true).
+		AddRoles(roleEnt).
+		Save(ctx)
+	if err != nil {
+		t.Fatalf("failed to create admin user: %v", err)
+	}
+
+	return userEnt.ID
+}
+
+// TestAdminListScopes_Success tests listing all scopes (admin)
+func TestAdminListScopes_Success(t *testing.T) {
+	client := openTestDB(t)
+	defer client.Close()
+	ctx := context.Background()
+
+	// Setup test data
+	adminUserID := createTestAdminUser(t, client, "admin_list_scopes_test")
+	clientID := uuid.New()
+	createTestOAuthClient(t, client, clientID)
+
+	// Create test scopes
+	_, err := client.Scope.Create().
+		SetClientID(clientID).
+		SetKey("openid").
+		SetIsExternal(false).
+		Save(ctx)
+	if err != nil {
+		t.Fatalf("failed to create test scope: %v", err)
+	}
+
+	r := setupAdminTestRouter(adminUserID)
+
+	w := performScopeRequest(r, http.MethodGet, "/admin/scopes", "")
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d, response: %s", w.Code, w.Body.String())
+	}
+
+	var response []ScopeResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+
+	if len(response) == 0 {
+		t.Fatalf("expected at least one scope")
+	}
+
+	// Find the scope we created
+	found := false
+	for _, s := range response {
+		if s.Key == "openid" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected scope key 'openid' in response")
+	}
+}
+
+// TestAdminListScopes_FilterByClientId tests filtering scopes by client_id
+func TestAdminListScopes_FilterByClientId(t *testing.T) {
+	client := openTestDB(t)
+	defer client.Close()
+	ctx := context.Background()
+
+	adminUserID := createTestAdminUser(t, client, "admin_list_filter_test")
+	clientID1 := uuid.New()
+	clientID2 := uuid.New()
+	createTestOAuthClient(t, client, clientID1)
+	createTestOAuthClient(t, client, clientID2)
+
+	// Create scopes for different clients
+	_, err := client.Scope.Create().
+		SetClientID(clientID1).
+		SetKey("scope1").
+		SetIsExternal(false).
+		Save(ctx)
+	if err != nil {
+		t.Fatalf("failed to create test scope: %v", err)
+	}
+
+	_, err = client.Scope.Create().
+		SetClientID(clientID2).
+		SetKey("scope2").
+		SetIsExternal(false).
+		Save(ctx)
+	if err != nil {
+		t.Fatalf("failed to create test scope: %v", err)
+	}
+
+	r := setupAdminTestRouter(adminUserID)
+
+	w := performScopeRequest(r, http.MethodGet, "/admin/scopes?client_id="+clientID1.String(), "")
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", w.Code)
+	}
+
+	var response []ScopeResponse
+	json.Unmarshal(w.Body.Bytes(), &response)
+
+	if len(response) != 1 {
+		t.Fatalf("expected 1 scope, got %d", len(response))
+	}
+
+	if response[0].Key != "scope1" {
+		t.Fatalf("expected scope key 'scope1'")
+	}
+}
+
+// TestAdminCreateScope_Success tests creating a scope (admin)
+func TestAdminCreateScope_Success(t *testing.T) {
+	client := openTestDB(t)
+	defer client.Close()
+
+	adminUserID := createTestAdminUser(t, client, "admin_create_scope_test")
+	clientID := uuid.New()
+	createTestOAuthClient(t, client, clientID)
+
+	r := setupAdminTestRouter(adminUserID)
+
+	body := `{
+		"scope": "admin_scope",
+		"description": "Admin created scope",
+		"is_external": false,
+		"json_schema": {
+			"client_id": "` + clientID.String() + `"
+		}
+	}`
+
+	w := performScopeRequest(r, http.MethodPost, "/admin/scopes", body)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d, response: %s", w.Code, w.Body.String())
+	}
+
+	var response ScopeResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+
+	if response.Key != "admin_scope" {
+		t.Fatalf("expected scope key 'admin_scope', got %s", response.Key)
+	}
+}
+
+// TestAdminCreateScope_MissingClientId tests error when client_id is missing
+func TestAdminCreateScope_MissingClientId(t *testing.T) {
+	client := openTestDB(t)
+	defer client.Close()
+
+	adminUserID := createTestAdminUser(t, client, "admin_missing_clientid_test")
+	r := setupAdminTestRouter(adminUserID)
+
+	body := `{
+		"scope": "test_scope",
+		"description": "Missing client_id",
+		"is_external": false,
+		"json_schema": {}
+	}`
+
+	w := performScopeRequest(r, http.MethodPost, "/admin/scopes", body)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d", w.Code)
+	}
+}
+
+// TestAdminDeleteScope_Success tests deleting a scope (admin)
+func TestAdminDeleteScope_Success(t *testing.T) {
+	client := openTestDB(t)
+	defer client.Close()
+	ctx := context.Background()
+
+	adminUserID := createTestAdminUser(t, client, "admin_delete_scope_test")
+	clientID := uuid.New()
+	createTestOAuthClient(t, client, clientID)
+
+	// Create test scope
+	scopeEnt, err := client.Scope.Create().
+		SetClientID(clientID).
+		SetKey("delete_test").
+		SetIsExternal(false).
+		Save(ctx)
+	if err != nil {
+		t.Fatalf("failed to create test scope: %v", err)
+	}
+
+	r := setupAdminTestRouter(adminUserID)
+
+	w := performScopeRequest(r, http.MethodDelete, "/admin/scopes/"+scopeEnt.ID.String(), "")
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d, response: %s", w.Code, w.Body.String())
+	}
+
+	// Verify scope is deleted
+	exists, err := client.Scope.Query().Where(scope.IDEQ(scopeEnt.ID)).Exist(ctx)
+	if err != nil {
+		t.Fatalf("failed to query scope: %v", err)
+	}
+
+	if exists {
+		t.Fatalf("expected scope to be deleted")
+	}
+}
+
+// TestAdminDeleteScope_NotFound tests deleting a non-existent scope
+func TestAdminDeleteScope_NotFound(t *testing.T) {
+	client := openTestDB(t)
+	defer client.Close()
+
+	adminUserID := createTestAdminUser(t, client, "admin_delete_notfound_test")
+	nonExistentID := uuid.New()
+
+	r := setupAdminTestRouter(adminUserID)
+
+	w := performScopeRequest(r, http.MethodDelete, "/admin/scopes/"+nonExistentID.String(), "")
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected status 404, got %d", w.Code)
 	}
 }

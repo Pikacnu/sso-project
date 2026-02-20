@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 
 import PageShell from "./PageShell";
-import { apiRequest } from "../utils/api";
-import type { Scope } from "../types";
+import { apiRequest, APIError } from "../utils/api";
+import type { Scope, Client } from "../types";
 
 type Message = { text: string; variant: "info" | "success" | "error" };
 
 type ScopeForm = {
+  clientId: string;
   key: string;
   description: string;
   isExternal: boolean;
@@ -17,6 +18,7 @@ type ScopeForm = {
 };
 
 const emptyScopeForm: ScopeForm = {
+  clientId: "",
   key: "",
   description: "",
   isExternal: false,
@@ -71,6 +73,7 @@ const DEFAULT_SCOPES: Scope[] = [
 
 export default function ScopesPage() {
   const [scopes, setScopes] = useState<Scope[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState<Message>({ text: "", variant: "info" });
   const [form, setForm] = useState<ScopeForm>(emptyScopeForm);
@@ -85,16 +88,36 @@ export default function ScopesPage() {
     []
   );
 
+  const loadClients = async () => {
+    try {
+      const data = await apiRequest<Client[]>("/admin/clients");
+      setClients(data);
+    } catch (error) {
+      if (error instanceof APIError && error.statusCode === 401) {
+        setMessage({ text: "Admin permission required to manage scopes", variant: "error" });
+        return;
+      }
+      console.warn("Failed to load clients");
+      setClients([]);
+    }
+  };
+
   const loadScopes = async () => {
     setIsLoading(true);
     try {
-      const data = await apiRequest<Scope[]>("/admin/scopes");
+      const url = form.clientId ? `/admin/scopes?client_id=${form.clientId}` : "/admin/scopes";
+      const data = await apiRequest<Scope[]>(url);
       setScopes(data);
       setMessage({ text: "", variant: "info" });
     } catch (error) {
-      // Fallback to default scopes if API not ready
-      console.warn("Failed to load scopes from API, using defaults");
-      setScopes(DEFAULT_SCOPES);
+      if (error instanceof APIError && error.statusCode === 401) {
+        setMessage({ text: "Admin permission required to manage scopes", variant: "error" });
+        setScopes([]);
+        setIsLoading(false);
+        return;
+      }
+      console.warn("Failed to load scopes from API");
+      setScopes([]);
       setMessage({ text: "", variant: "info" });
     } finally {
       setIsLoading(false);
@@ -102,11 +125,16 @@ export default function ScopesPage() {
   };
 
   useEffect(() => {
+    loadClients();
     loadScopes();
-  }, []);
+  }, [form.clientId]);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!form.clientId.trim()) {
+      setMessage({ text: "Client is required", variant: "error" });
+      return;
+    }
     if (!form.key.trim()) {
       setMessage({ text: "Scope key is required", variant: "error" });
       return;
@@ -122,7 +150,9 @@ export default function ScopesPage() {
         external_method: form.isExternal ? form.externalMethod : undefined,
         auth_type: form.authType || undefined,
         auth_secret_env: form.authSecretEnv || undefined,
-        json_schema: {},
+        json_schema: {
+          client_id: form.clientId,
+        },
         data: "",
       };
       await apiRequest<Scope>("/admin/scopes", {
@@ -215,6 +245,22 @@ export default function ScopesPage() {
 
           {showCreateForm ? (
             <form className="mt-5 space-y-4" onSubmit={handleSubmit}>
+              <label className="block">
+                <span className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-700">Client</span>
+                <select
+                  required
+                  value={form.clientId}
+                  onChange={(event) => setForm({ ...form, clientId: event.target.value })}
+                  className="mt-2 w-full rounded-2xl border border-amber-100 bg-white px-4 py-3 text-sm text-slate-900 focus:border-amber-400 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                >
+                  <option value="">Select a client...</option>
+                  {clients.map((client) => (
+                    <option key={client.id} value={client.id}>
+                      {client.app_name} ({client.id})
+                    </option>
+                  ))}
+                </select>
+              </label>
               <label className="block">
                 <span className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-700">Scope Key</span>
                 <input

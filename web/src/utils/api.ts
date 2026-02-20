@@ -22,13 +22,6 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
   });
 
   if (!response.ok) {
-    // Handle unauthorized - redirect to login
-    if (response.status === 401) {
-      if (typeof window !== "undefined") {
-        window.location.href = "/login";
-      }
-    }
-
     let errorData: { error?: string; error_description?: string } = {};
     try {
       errorData = await response.json();

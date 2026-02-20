@@ -134,7 +134,7 @@ func verifyEmailHandler(ctx *gin.Context) {
 			ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "server_error", "error_description": "Failed to create session"})
 			return
 		}
-		ctx.SetCookie("session_token", result.Token, int(time.Hour*24*7/time.Second), "/", "", false, true)
+		ctx.SetCookie("session_token", result.Token, int(time.Hour*24*7/time.Second), "/", "", true, true)
 		ctx.JSON(http.StatusOK, gin.H{
 			"message":    "Email verified",
 			"token":      result.Token,
@@ -155,7 +155,7 @@ func verifyEmailHandler(ctx *gin.Context) {
 			ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "server_error", "error_description": "Failed to create session"})
 			return
 		}
-		ctx.SetCookie("session_token", result.Token, int(time.Hour*24*7/time.Second), "/", "", false, true)
+		ctx.SetCookie("session_token", result.Token, int(time.Hour*24*7/time.Second), "/", "", true, true)
 		ctx.Redirect(http.StatusTemporaryRedirect, redirectURL)
 		return
 	}

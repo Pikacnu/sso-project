@@ -35,15 +35,21 @@ type ClientUpdateRequest struct {
 }
 
 func RegisterClientRoutes(router *gin.Engine) {
-	group := router.Group("/clients")
-	group.Use(middleware.RequireRole("admin"))
-	group.GET("", listClientsHandler)
-	group.POST("", createClientHandler)
-	group.GET("/:id", getClientHandler)
-	group.PUT("/:id", updateClientHandler)
-	group.POST("/:id/disable", disableClientHandler)
-	group.POST("/:id/enable", enableClientHandler)
-	group.POST("/:id/rotate-secret", rotateClientSecretHandler)
+	setupClientRoutes := func(prefix string) {
+		group := router.Group(prefix)
+		group.Use(middleware.RequireRole("admin"))
+		group.GET("", listClientsHandler)
+		group.POST("", createClientHandler)
+		group.GET("/:id", getClientHandler)
+		group.PUT("/:id", updateClientHandler)
+		group.POST("/:id/disable", disableClientHandler)
+		group.POST("/:id/enable", enableClientHandler)
+		group.POST("/:id/rotate-secret", rotateClientSecretHandler)
+	}
+	
+	// Register both /clients and /admin/clients routes
+	setupClientRoutes("/clients")
+	setupClientRoutes("/admin/clients")
 }
 
 // @Summary List OAuth clients
