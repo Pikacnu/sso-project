@@ -13,7 +13,6 @@ type Env struct {
 	AppName                 string `json:"app_name"`
 	Port                    string `json:"port"`
 	Hostname                string `json:"hostname"`
-	FrontendURL             string `json:"frontend_url"`
 	Debug                   bool   `json:"debug"`
 	DatabaseURL             string `json:"database_url"`
 	IsSQLite                bool   `json:"is_sqlite"`
@@ -46,7 +45,6 @@ func NewEnvFromEnv() *Env {
 		AppName:          getEnv("APP_NAME", "sso-server"),
 		Port:             getEnv("PORT", "8080"),
 		Hostname:         getEnv("HOSTNAME", "localhost"),
-		FrontendURL:      getEnv("FRONTEND_URL", "http://localhost:5173"),
 		Debug:            getEnvBool("DEBUG", "false"),
 		ConnectionString: getEnv("CONNECTION_STRING", ""),
 		IsSQLite:         getEnvBool("DB_USE_SQLITE", "false"),

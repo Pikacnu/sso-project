@@ -12,7 +12,6 @@ import (
 	"sso-server/ent/generated/refreshtoken"
 	"sso-server/ent/generated/scope"
 	"sso-server/src/auth"
-	"sso-server/src/config"
 	"sso-server/src/db"
 	. "sso-server/src/db"
 	"strings"
@@ -227,8 +226,8 @@ func authorizeHandler(ctx *gin.Context) {
 
 	// If no provider specified, redirect to frontend login page
 	if providor == "" {
-		frontendURL := config.SystemEnv.FrontendURL
-		ctx.Redirect(http.StatusTemporaryRedirect, frontendURL+"/auth/login?flow_id="+flowIDStr)
+		// frontend host in same server, redirect to frontend login page with flow ID in query for demo
+		ctx.Redirect(http.StatusTemporaryRedirect, protocol + "://" + hostname + "/auth/login?flow_id="+flowIDStr)
 		return
 	}
 
