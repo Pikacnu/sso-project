@@ -198,7 +198,7 @@ export default function ScopesPage() {
       }
     >
       <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-        <div className="rounded-3xl border border-amber-100 bg-white/95 p-6 shadow-lg shadow-amber-100/40 dark:border-slate-800 dark:bg-slate-900/70">
+        <div className="rounded-3xl border border-amber-100 bg-white/95 p-6  shadow-amber-100/40 dark:border-slate-800 dark:bg-slate-900/70">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Scope Library</h2>
             {isLoading ? <span className="text-xs text-slate-500">Loading...</span> : null}
@@ -269,7 +269,7 @@ export default function ScopesPage() {
                   value={form.key}
                   onChange={(event) => setForm({ ...form, key: event.target.value })}
                   placeholder="e.g., sso.profile"
-                  className="mt-2 w-full rounded-2xl border border-amber-100 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm focus:border-amber-400 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                  className="mt-2 w-full rounded-2xl border border-amber-100 bg-white px-4 py-3 text-sm text-slate-900  focus:border-amber-400 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                 />
               </label>
               <label className="block">
@@ -279,7 +279,7 @@ export default function ScopesPage() {
                   value={form.description}
                   onChange={(event) => setForm({ ...form, description: event.target.value })}
                   placeholder="What does this scope provide?"
-                  className="mt-2 w-full rounded-2xl border border-amber-100 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm focus:border-amber-400 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                  className="mt-2 w-full rounded-2xl border border-amber-100 bg-white px-4 py-3 text-sm text-slate-900  focus:border-amber-400 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                 />
               </label>
               <label className="flex items-center gap-2">
@@ -302,7 +302,7 @@ export default function ScopesPage() {
                       value={form.externalEndpoint}
                       onChange={(event) => setForm({ ...form, externalEndpoint: event.target.value })}
                       placeholder="https://api.example.com/user"
-                      className="mt-2 w-full rounded-2xl border border-amber-100 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm focus:border-amber-400 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                      className="mt-2 w-full rounded-2xl border border-amber-100 bg-white px-4 py-3 text-sm text-slate-900  focus:border-amber-400 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                     />
                   </label>
                   <label className="block">
@@ -314,7 +314,7 @@ export default function ScopesPage() {
                       value={form.externalMethod}
                       onChange={(event) => setForm({ ...form, externalMethod: event.target.value })}
                       placeholder="GET"
-                      className="mt-2 w-full rounded-2xl border border-amber-100 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm focus:border-amber-400 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                      className="mt-2 w-full rounded-2xl border border-amber-100 bg-white px-4 py-3 text-sm text-slate-900  focus:border-amber-400 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                     />
                   </label>
                 </>

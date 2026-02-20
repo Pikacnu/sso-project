@@ -159,7 +159,7 @@ export default function RolesUserBinding() {
         </button>
       }
     >
-      <section className="rounded-3xl border border-amber-100 bg-white/95 p-6 shadow-lg shadow-amber-100/40 dark:border-slate-800 dark:bg-slate-900/70">
+      <section className="rounded-3xl border border-amber-100 bg-white/95 p-6  shadow-amber-100/40 dark:border-slate-800 dark:bg-slate-900/70">
         <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
           Assign Roles to User
         </h2>

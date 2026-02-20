@@ -124,7 +124,7 @@ export default function LoginPage() {
                   placeholder="you@example.com"
                   autoComplete="email"
                   required
-                  className="mt-2 w-full rounded-2xl border border-amber-100 dark:border-slate-600 bg-white dark:bg-slate-700 px-4 py-3 text-sm text-slate-900 dark:text-slate-100 placeholder-slate-500 dark:placeholder-slate-500 shadow-sm focus:border-amber-400 dark:focus:border-amber-500 focus:outline-none"
+                  className="mt-2 w-full rounded-2xl border border-amber-100 dark:border-slate-600 bg-white dark:bg-slate-700 px-4 py-3 text-sm text-slate-900 dark:text-slate-100 placeholder-slate-500 dark:placeholder-slate-500  focus:border-amber-400 dark:focus:border-amber-500 focus:outline-none"
                 />
               </label>
               <label className="block">
@@ -135,13 +135,13 @@ export default function LoginPage() {
                   placeholder="Your password"
                   autoComplete="current-password"
                   required
-                  className="mt-2 w-full rounded-2xl border border-amber-100 dark:border-slate-600 bg-white dark:bg-slate-700 px-4 py-3 text-sm text-slate-900 dark:text-slate-100 placeholder-slate-500 dark:placeholder-slate-500 shadow-sm focus:border-amber-400 dark:focus:border-amber-500 focus:outline-none"
+                  className="mt-2 w-full rounded-2xl border border-amber-100 dark:border-slate-600 bg-white dark:bg-slate-700 px-4 py-3 text-sm text-slate-900 dark:text-slate-100 placeholder-slate-500 dark:placeholder-slate-500  focus:border-amber-400 dark:focus:border-amber-500 focus:outline-none"
                 />
               </label>
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full rounded-2xl bg-slate-900 dark:bg-amber-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/20 dark:shadow-amber-600/30 transition hover:-translate-y-0.5 dark:hover:bg-amber-500 disabled:opacity-50"
+                className="w-full rounded-2xl bg-slate-900 dark:bg-amber-600 px-4 py-3 text-sm font-semibold text-white  shadow-slate-900/20 dark:shadow-amber-600/30 transition hover:-translate-y-0.5 dark:hover:bg-amber-500 disabled:opacity-50"
               >
                 {isLoading ? "Logging in..." : "Login"}
               </button>
@@ -158,7 +158,7 @@ export default function LoginPage() {
                   placeholder="you@example.com"
                   autoComplete="email"
                   required
-                  className="mt-2 w-full rounded-2xl border border-amber-100 dark:border-slate-600 bg-white dark:bg-slate-700 px-4 py-3 text-sm text-slate-900 dark:text-slate-100 placeholder-slate-500 dark:placeholder-slate-500 shadow-sm focus:border-amber-400 dark:focus:border-amber-500 focus:outline-none"
+                  className="mt-2 w-full rounded-2xl border border-amber-100 dark:border-slate-600 bg-white dark:bg-slate-700 px-4 py-3 text-sm text-slate-900 dark:text-slate-100 placeholder-slate-500 dark:placeholder-slate-500  focus:border-amber-400 dark:focus:border-amber-500 focus:outline-none"
                 />
               </label>
               <label className="block">
@@ -169,7 +169,7 @@ export default function LoginPage() {
                   placeholder="Create a password"
                   autoComplete="new-password"
                   required
-                  className="mt-2 w-full rounded-2xl border border-amber-100 dark:border-slate-600 bg-white dark:bg-slate-700 px-4 py-3 text-sm text-slate-900 dark:text-slate-100 placeholder-slate-500 dark:placeholder-slate-500 shadow-sm focus:border-amber-400 dark:focus:border-amber-500 focus:outline-none"
+                  className="mt-2 w-full rounded-2xl border border-amber-100 dark:border-slate-600 bg-white dark:bg-slate-700 px-4 py-3 text-sm text-slate-900 dark:text-slate-100 placeholder-slate-500 dark:placeholder-slate-500  focus:border-amber-400 dark:focus:border-amber-500 focus:outline-none"
                 />
               </label>
               <label className="block">
@@ -179,13 +179,13 @@ export default function LoginPage() {
                   name="username"
                   autoComplete="username"
                   placeholder="Display name"
-                  className="mt-2 w-full rounded-2xl border border-amber-100 dark:border-slate-600 bg-white dark:bg-slate-700 px-4 py-3 text-sm text-slate-900 dark:text-slate-100 placeholder-slate-500 dark:placeholder-slate-500 shadow-sm focus:border-amber-400 dark:focus:border-amber-500 focus:outline-none"
+                  className="mt-2 w-full rounded-2xl border border-amber-100 dark:border-slate-600 bg-white dark:bg-slate-700 px-4 py-3 text-sm text-slate-900 dark:text-slate-100 placeholder-slate-500 dark:placeholder-slate-500  focus:border-amber-400 dark:focus:border-amber-500 focus:outline-none"
                 />
               </label>
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full rounded-2xl bg-slate-900 dark:bg-amber-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/20 dark:shadow-amber-600/30 transition hover:-translate-y-0.5 dark:hover:bg-amber-500 disabled:opacity-50"
+                className="w-full rounded-2xl bg-slate-900 dark:bg-amber-600 px-4 py-3 text-sm font-semibold text-white  shadow-slate-900/20 dark:shadow-amber-600/30 transition hover:-translate-y-0.5 dark:hover:bg-amber-500 disabled:opacity-50"
               >
                 {isLoading ? "Creating account..." : "Create Account"}
               </button>
@@ -207,13 +207,13 @@ export default function LoginPage() {
           <div className="mt-5 grid gap-3 grid-cols-2">
             <a
               href={getOAuthUrl("google")}
-              className="flex items-center justify-center rounded-2xl border border-amber-100 dark:border-slate-600 bg-white dark:bg-slate-700 px-4 py-3 text-sm font-semibold text-slate-800 dark:text-slate-200 shadow-sm transition hover:-translate-y-0.5 hover:border-amber-300 dark:hover:border-amber-600 dark:hover:bg-slate-600"
+              className="flex items-center justify-center rounded-2xl border border-amber-100 dark:border-slate-600 bg-white dark:bg-slate-700 px-4 py-3 text-sm font-semibold text-slate-800 dark:text-slate-200  transition hover:-translate-y-0.5 hover:border-amber-300 dark:hover:border-amber-600 dark:hover:bg-slate-600"
             >
               Google
             </a>
             <a
               href={getOAuthUrl("discord")}
-              className="flex items-center justify-center rounded-2xl border border-amber-100 dark:border-slate-600 bg-white dark:bg-slate-700 px-4 py-3 text-sm font-semibold text-slate-800 dark:text-slate-200 shadow-sm transition hover:-translate-y-0.5 hover:border-amber-300 dark:hover:border-amber-600 dark:hover:bg-slate-600"
+              className="flex items-center justify-center rounded-2xl border border-amber-100 dark:border-slate-600 bg-white dark:bg-slate-700 px-4 py-3 text-sm font-semibold text-slate-800 dark:text-slate-200  transition hover:-translate-y-0.5 hover:border-amber-300 dark:hover:border-amber-600 dark:hover:bg-slate-600"
             >
               Discord
             </a>

@@ -81,7 +81,7 @@ export default function AdminSetup() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-liner-to-br from-amber-50 to-white px-4 dark:from-slate-950 dark:to-slate-900">
       <div className="w-full max-w-md">
-        <div className="rounded-3xl border border-amber-200/70 bg-white/95 p-8 shadow-lg dark:border-slate-800 dark:bg-slate-900/80">
+        <div className="rounded-3xl border border-amber-200/70 bg-white/95 p-8  dark:border-slate-800 dark:bg-slate-900/80">
           <div className="mb-6 text-center">
             <div className="mx-auto mb-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-100 text-amber-700 dark:bg-amber-600/20 dark:text-amber-400">
               <span className="text-lg font-bold">SSO</span>
@@ -106,7 +106,7 @@ export default function AdminSetup() {
                   onChange={(e) => setForm({ ...form, email: e.target.value })}
                   placeholder="admin@example.com"
                   disabled={isLoading}
-                  className="mt-2 w-full rounded-2xl border border-amber-100 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm focus:border-amber-400 focus:outline-none disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                  className="mt-2 w-full rounded-2xl border border-amber-100 bg-white px-4 py-3 text-sm text-slate-900  focus:border-amber-400 focus:outline-none disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                 />
               </label>
 
@@ -119,7 +119,7 @@ export default function AdminSetup() {
                   onChange={(e) => setForm({ ...form, username: e.target.value })}
                   placeholder="admin"
                   disabled={isLoading}
-                  className="mt-2 w-full rounded-2xl border border-amber-100 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm focus:border-amber-400 focus:outline-none disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                  className="mt-2 w-full rounded-2xl border border-amber-100 bg-white px-4 py-3 text-sm text-slate-900  focus:border-amber-400 focus:outline-none disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                 />
               </label>
 
@@ -133,7 +133,7 @@ export default function AdminSetup() {
                   placeholder="••••••••"
                   minLength={8}
                   disabled={isLoading}
-                  className="mt-2 w-full rounded-2xl border border-amber-100 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm focus:border-amber-400 focus:outline-none disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                  className="mt-2 w-full rounded-2xl border border-amber-100 bg-white px-4 py-3 text-sm text-slate-900  focus:border-amber-400 focus:outline-none disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                 />
                 <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Minimum 8 characters</p>
               </label>
@@ -148,7 +148,7 @@ export default function AdminSetup() {
                   placeholder="••••••••"
                   minLength={8}
                   disabled={isLoading}
-                  className="mt-2 w-full rounded-2xl border border-amber-100 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm focus:border-amber-400 focus:outline-none disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                  className="mt-2 w-full rounded-2xl border border-amber-100 bg-white px-4 py-3 text-sm text-slate-900  focus:border-amber-400 focus:outline-none disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                 />
               </label>
 

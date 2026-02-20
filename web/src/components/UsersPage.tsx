@@ -97,7 +97,7 @@ export default function UsersPage() {
       }
     >
       <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-        <div className="rounded-3xl border border-amber-100 bg-white/95 p-6 shadow-lg shadow-amber-100/40 dark:border-slate-800 dark:bg-slate-900/70">
+        <div className="rounded-3xl border border-amber-100 bg-white/95 p-6  shadow-amber-100/40 dark:border-slate-800 dark:bg-slate-900/70">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">User Directory</h2>
             {isLoading ? <span className="text-xs text-slate-500">Loading...</span> : null}
@@ -142,7 +142,7 @@ export default function UsersPage() {
                 value={form.username}
                 onChange={(event) => setForm({ ...form, username: event.target.value })}
                 placeholder="Display name"
-                className="mt-2 w-full rounded-2xl border border-amber-100 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm focus:border-amber-400 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                className="mt-2 w-full rounded-2xl border border-amber-100 bg-white px-4 py-3 text-sm text-slate-900  focus:border-amber-400 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
               />
             </label>
             <label className="block">
@@ -153,7 +153,7 @@ export default function UsersPage() {
                 value={form.email}
                 onChange={(event) => setForm({ ...form, email: event.target.value })}
                 placeholder="you@example.com"
-                className="mt-2 w-full rounded-2xl border border-amber-100 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm focus:border-amber-400 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                className="mt-2 w-full rounded-2xl border border-amber-100 bg-white px-4 py-3 text-sm text-slate-900  focus:border-amber-400 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
               />
             </label>
             <label className="block">
@@ -163,7 +163,7 @@ export default function UsersPage() {
                 value={form.password}
                 onChange={(event) => setForm({ ...form, password: event.target.value })}
                 placeholder="Optional password"
-                className="mt-2 w-full rounded-2xl border border-amber-100 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm focus:border-amber-400 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                className="mt-2 w-full rounded-2xl border border-amber-100 bg-white px-4 py-3 text-sm text-slate-900  focus:border-amber-400 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
               />
             </label>
             <button
