@@ -1,18 +1,24 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useSyncExternalStore } from "react";
 
 export default function LoginPage() {
-  const [tab, setTab] = useState<"login" | "register">("login");
+  const [tab, setTab] = useState<"login" | "register" | "forgot">("login");
   const [message, setMessage] = useState<{ text: string; variant: "info" | "success" | "error" }>({ text: "", variant: "info" });
   const [isLoading, setIsLoading] = useState(false);
   const [flowId, setFlowId] = useState("");
-  const [redirectUrl, setRedirectUrl] = useState("");
+  const [redirectUrl, setRedirectUrl] = useState("/");
   const [showPopup, setShowPopup] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
+  const isClient = useSyncExternalStore(
+    ()=> ()=>true,
+    () => true,
+    () => false
+  )
 
   useEffect(() => {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       setFlowId(params.get("flow_id") || "");
-      setRedirectUrl(params.get("redirect_url") || "");
+      setRedirectUrl(params.get("redirect_url") || "/");
     }
   }, []);
 
@@ -26,15 +32,22 @@ export default function LoginPage() {
     e.preventDefault();
     setIsLoading(true);
     setMessage({ text: "Working on it...", variant: "info" });
+    setEmailSent(false);
 
     const form = e.currentTarget as HTMLFormElement;
     const formData = new FormData(form);
     const payload = Object.fromEntries(formData.entries());
 
     if (flowId) payload.flow_id = flowId;
-    if (redirectUrl) payload.redirect_url = redirectUrl;
+    // Always include redirect_url, default to home page
+    payload.redirect_url = redirectUrl || "/";
 
-    const endpoint = tab === "register" ? "/auth/email/register" : "/auth/email/login";
+    let endpoint = "/auth/email/register";
+    if (tab === "login") {
+      endpoint = "/auth/email/login";
+    } else if (tab === "forgot") {
+      endpoint = "/auth/email/forgot-password";
+    }
 
     try {
       const response = await fetch(endpoint, {
@@ -53,11 +66,36 @@ export default function LoginPage() {
       }
 
       const result = await response.json().catch(() => ({}));
+      
+      // Handle email verification requirement (403 status)
+      if (response.status === 403 && result.error === "email_not_verified") {
+        setEmailSent(true);
+        setMessage({
+          text: result.error_description || "Email verification required. Check your inbox!",
+          variant: "info",
+        });
+        form.reset();
+        setIsLoading(false);
+        return;
+      }
+      
       if (!response.ok) {
         setMessage({
           text: result.error_description || result.error || "Request failed",
           variant: "error",
         });
+        setIsLoading(false);
+        return;
+      }
+
+      // For successful registration/login that requires email verification
+      if ((result.message?.includes("sent") || result.message?.includes("Verification")) && tab === "register") {
+        setEmailSent(true);
+        setMessage({
+          text: result.message || "Verification email sent! Check your inbox.",
+          variant: "success",
+        });
+        form.reset();
         setIsLoading(false);
         return;
       }
@@ -77,13 +115,15 @@ export default function LoginPage() {
     }
   };
 
-  const getOAuthUrl = (provider: string) => {
-    if (typeof window === "undefined") return `#`;
+  const getOAuthUrl = useCallback((provider: string) => {
+    if (!isClient) return "#";
     const url = new URL(`/auth/${provider}/login`, window.location.origin);
     if (flowId) url.searchParams.set("flow_id", flowId);
     if (redirectUrl) url.searchParams.set("redirect_url", redirectUrl);
     return url.toString();
-  };
+  }, [flowId, redirectUrl,isClient]);
+
+  
 
   return (
     <main className="relative min-h-screen w-full bg-gray-100 dark:bg-slate-950 px-6 py-10 sm:py-14">
@@ -94,27 +134,28 @@ export default function LoginPage() {
             <p className="text-sm text-slate-600 dark:text-slate-400">Sign in or create an account to continue.</p>
           </div>
 
-          <div className="mt-6 flex gap-3 rounded-full border border-amber-100 dark:border-amber-900/50 bg-amber-50 dark:bg-slate-700/50 p-1">
-            {(["login", "register"] as const).map((t) => (
+          <div className="mt-6 flex gap-2 rounded-full border border-amber-100 dark:border-amber-900/50 bg-amber-50 dark:bg-slate-700/50 p-1">
+            {(["login", "register", "forgot"] as const).map((t) => (
               <button
                 key={t}
                 type="button"
                 onClick={() => {
                   setTab(t);
                   setMessage({ text: "", variant: "info" });
+                  setEmailSent(false);
                 }}
-                className={`flex-1 rounded-full px-4 py-2 text-sm font-semibold transition ${
+                className={`flex-1 rounded-full px-3 py-2 text-xs sm:text-sm font-semibold transition ${
                   tab === t
                     ? "bg-white dark:bg-slate-600 text-slate-900 dark:text-slate-100"
                     : "text-slate-600 dark:text-slate-400"
                 }`}
               >
-                {t === "login" ? "Login" : "Register"}
+                {t === "login" ? "Login" : t === "register" ? "Register" : "Forgot"}
               </button>
             ))}
           </div>
 
-          {tab === "login" && (
+          {tab === "login" && !emailSent && (
             <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
               <label className="block">
                 <span className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-700 dark:text-amber-600">Email</span>
@@ -148,7 +189,30 @@ export default function LoginPage() {
             </form>
           )}
 
-          {tab === "register" && (
+          {tab === "forgot" && !emailSent && (
+            <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
+              <label className="block">
+                <span className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-700 dark:text-amber-600">Email</span>
+                <input
+                  type="email"
+                  name="email"
+                  placeholder="you@example.com"
+                  autoComplete="email"
+                  required
+                  className="mt-2 w-full rounded-2xl border border-amber-100 dark:border-slate-600 bg-white dark:bg-slate-700 px-4 py-3 text-sm text-slate-900 dark:text-slate-100 placeholder-slate-500 dark:placeholder-slate-500 focus:border-amber-400 dark:focus:border-amber-500 focus:outline-none"
+                />
+              </label>
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="w-full rounded-2xl bg-slate-900 dark:bg-amber-600 px-4 py-3 text-sm font-semibold text-white shadow-slate-900/20 dark:shadow-amber-600/30 transition hover:-translate-y-0.5 dark:hover:bg-amber-500 disabled:opacity-50"
+              >
+                {isLoading ? "Sending..." : "Reset Password"}
+              </button>
+            </form>
+          )}
+
+          {tab === "register" && !emailSent && (
             <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
               <label className="block">
                 <span className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-700 dark:text-amber-600">Email</span>
@@ -195,6 +259,36 @@ export default function LoginPage() {
           {message.text && (
             <div className={`mt-4 min-h-6 text-sm ${messageClasses[message.variant]}`}>
               {message.text}
+            </div>
+          )}
+
+          {emailSent && (
+            <div className="mt-6 rounded-2xl border border-amber-200 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-900/10 p-4">
+              <div className="flex gap-3">
+                <div className="shrink-0">
+                  <svg className="h-5 w-5 text-amber-600 dark:text-amber-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-amber-800 dark:text-amber-200">Check your email</h3>
+                  <p className="mt-2 text-sm text-amber-700 dark:text-amber-300">
+                    We've sent a {tab === "forgot" ? "password reset" : "verification"} link to your email. Click the link to {tab === "register" ? "complete your registration" : tab === "forgot" ? "reset your password" : "verify your account"}.
+                  </p>
+                  <p className="mt-3 text-xs text-amber-600 dark:text-amber-400">
+                    Didn't get it? Check your spam folder or{" "}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEmailSent(false);
+                      }}
+                      className="underline hover:text-amber-800 dark:hover:text-amber-200"
+                    >
+                      try again
+                    </button>
+                  </p>
+                </div>
+              </div>
             </div>
           )}
 

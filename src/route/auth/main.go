@@ -36,6 +36,9 @@ func RegisterAuthRoutes(router *gin.Engine) {
 	// Email auth routes
 	routerGroup.POST("/email/register", emailRegisterHandler)
 	routerGroup.POST("/email/login", emailLoginHandler)
+	routerGroup.POST("/email/forgot-password", forgotPasswordHandler)
+	routerGroup.GET("/reset-password", verifyResetTokenHandler)
+	routerGroup.POST("/email/reset-password", resetPasswordHandler)
 	// Admin initialization routes
 	routerGroup.POST("/admin/init", adminInitHandler)
 }

@@ -26,6 +26,8 @@ func (User) Fields() []ent.Field {
 		field.Time("email_verification_expires_at").Optional().Nillable(),
 		field.String("password").Optional().Nillable(),
 		field.String("avatar").Optional().Nillable(),
+		field.String("password_reset_token").Optional().Nillable(),
+		field.Time("password_reset_expires_at").Optional().Nillable(),
 	}
 }
 

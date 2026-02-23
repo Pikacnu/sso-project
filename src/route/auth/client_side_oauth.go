@@ -18,8 +18,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"golang.org/x/oauth2"
-	"google.golang.org/api/option"
-	"google.golang.org/api/people/v1"
 )
 
 // @Summary OAuth login
@@ -293,25 +291,25 @@ func getDiscordUser(client *http.Client) (*providors.DiscordUser, error) {
 }
 
 func getGoogleUser(client *http.Client) (*ReturnedDefaultUser, error) {
-	service, err := people.NewService(context.Background(), option.WithHTTPClient(client))
+	resp, err := client.Get("https://www.googleapis.com/oauth2/v3/userinfo")
 	if err != nil {
 		return nil, err
 	}
-	person, err := service.People.Get("people/me").PersonFields("names,emailAddresses,photos").Do()
-	if err != nil {
-		return nil, err
+	defer resp.Body.Close()
+	var data struct {
+		Sub     string `json:"sub"`
+		Name    string `json:"name"`
+		Email   string `json:"email"`
+		Picture string `json:"picture"`
 	}
 	var googleUser ReturnedDefaultUser
-	if len(person.Names) > 0 {
-		googleUser.Name = person.Names[0].DisplayName
-		googleUser.ID = person.Names[0].Metadata.Source.Id
+	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+		return nil, err
 	}
-	if len(person.EmailAddresses) > 0 {
-		googleUser.Email = person.EmailAddresses[0].Value
-	}
-	if len(person.Photos) > 0 {
-		googleUser.Avatar = person.Photos[0].Url
-	}
+	googleUser.ID = data.Sub
+	googleUser.Name = data.Name
+	googleUser.Email = data.Email
+	googleUser.Avatar = data.Picture
 	return &googleUser, nil
 }
 

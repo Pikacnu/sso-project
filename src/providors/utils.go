@@ -32,8 +32,12 @@ var (
 
 func GetAuthCallbackUrl(provider string) string {
 	protocol := "http"
+	port := cfg.Port
 	if cfg.Port == "443" {
 		protocol = "https"
 	}
-	return fmt.Sprintf("%s://%s:%s/auth/%s/callback", protocol, cfg.Hostname, cfg.Port, provider)
+	if !cfg.Debug {
+		return fmt.Sprintf("%s://%s/auth/%s/callback", protocol, cfg.Hostname, provider)
+	}
+	return fmt.Sprintf("%s://%s:%s/auth/%s/callback", protocol, cfg.Hostname, port, provider)
 }
