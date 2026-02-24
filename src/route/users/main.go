@@ -8,6 +8,7 @@ import (
 
 	ent "sso-server/ent/generated"
 	"sso-server/ent/generated/user"
+	"sso-server/ent/generated/role"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -147,6 +148,11 @@ func createUserHandler(c *gin.Context) {
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
 		return
+	}
+
+	// Attach default 'user' role if exists
+	if roleEnt, err := dbpkg.Client.Role.Query().Where(role.NameEQ("user")).Only(ctx); err == nil {
+		_, _ = dbpkg.Client.User.UpdateOneID(u.ID).AddRoles(roleEnt).Save(ctx)
 	}
 
 	c.JSON(http.StatusCreated, userResponse(u))

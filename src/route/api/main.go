@@ -4,7 +4,9 @@ import (
 	"context"
 	"net/http"
 	ent "sso-server/ent/generated"
+	"sso-server/ent/generated/role"
 	"sso-server/ent/generated/session"
+	"sso-server/ent/generated/user"
 	dbpkg "sso-server/src/db"
 
 	"github.com/gin-gonic/gin"
@@ -67,10 +69,35 @@ func GetUserData(c *gin.Context) {
 		avatarStr = *userEnt.Avatar
 	}
 
+	// Fetch roles and permissions for the user
+	ctx := ctxBg
+	roles := make([]string, 0)
+	permsSet := map[string]struct{}{}
+
+	roleObjs, err := dbpkg.Client.User.Query().Where(user.IDEQ(userEnt.ID)).QueryRoles().All(ctx)
+	if err == nil {
+		for _, r := range roleObjs {
+			roles = append(roles, r.Name)
+			permObjs, err := dbpkg.Client.Role.Query().Where(role.IDEQ(r.ID)).QueryPermissions().All(ctx)
+			if err == nil {
+				for _, p := range permObjs {
+					permsSet[p.Key] = struct{}{}
+				}
+			}
+		}
+	}
+
+	perms := make([]string, 0, len(permsSet))
+	for k := range permsSet {
+		perms = append(perms, k)
+	}
+
 	c.JSON(200, gin.H{
-		"id":       userEnt.ID,
-		"email":    userEnt.Email,
-		"username": userEnt.Username,
-		"avatar":   avatarStr,
+		"id":          userEnt.ID,
+		"email":       userEnt.Email,
+		"username":    userEnt.Username,
+		"avatar":      avatarStr,
+		"roles":       roles,
+		"permissions": perms,
 	})
 }

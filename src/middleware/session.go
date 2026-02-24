@@ -3,6 +3,7 @@ package middleware
 import (
 	"context"
 	"net/http"
+	"strings"
 	ent "sso-server/ent/generated"
 	"sso-server/ent/generated/session"
 	"sso-server/src/auth"
@@ -37,6 +38,11 @@ func SessionMiddleware() gin.HandlerFunc {
 
 		tokenString, err := c.Cookie("session_token")
 		if err != nil {
+			// If this is an API/XHR request, return 401 JSON instead of redirecting.
+			if strings.HasPrefix(urlPath, "/api/") || strings.Contains(c.GetHeader("Accept"), "application/json") || c.GetHeader("X-Requested-With") == "XMLHttpRequest" {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "authentication_required"})
+				return
+			}
 			c.Redirect(http.StatusTemporaryRedirect, "/login")
 			c.Abort()
 			return

@@ -72,43 +72,11 @@ func RegisterScopeRoutes(router *gin.Engine) {
 func registerScopeHandler(c *gin.Context) {
 	var clientUUID uuid.UUID
 	var ctxBg = context.Background()
-	
+
 	// Try to get client_id from context (client authentication)
 	if clientID, ok := c.Get("client_id"); ok {
 		if id, ok := clientID.(uuid.UUID); ok {
 			clientUUID = id
-		}
-	}
-	
-	// If no client context, check for admin/scopes role (user authentication)
-	if clientUUID == uuid.Nil {
-		userID, ok := c.Get("user_id")
-		if !ok {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Missing client or user context"})
-			return
-		}
-		
-		userUUID, ok := userID.(uuid.UUID)
-		if !ok {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid user context"})
-			return
-		}
-		
-		// Verify user has admin or scopes management role
-		hasRole, err := dbpkg.Client.User.Query().
-			Where(user.IDEQ(userUUID)).
-			QueryRoles().
-			Where(role.NameEQ("admin")).
-			Exist(ctxBg)
-		
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify permissions"})
-			return
-		}
-		
-		if !hasRole {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "User does not have scopes management permission"})
-			return
 		}
 	}
 
@@ -128,6 +96,46 @@ func registerScopeHandler(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "external_endpoint is required for external scopes"})
 		return
 	}
+	// If no client context, try to obtain client_id from request (user flow)
+	if clientUUID == uuid.Nil {
+		// Expect client_id in JSONSchema for user flows
+		if clientIDVal, ok := req.JSONSchema["client_id"].(string); ok && clientIDVal != "" {
+			if id, err := uuid.Parse(clientIDVal); err == nil {
+				clientUUID = id
+			}
+		}
+		if clientUUID == uuid.Nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Missing client context or client_id in request"})
+			return
+		}
+
+		// If user auth, ensure user owns the client (non-admin)
+		if userID, ok := c.Get("user_id"); ok {
+			userUUID, ok := userID.(uuid.UUID)
+			if !ok {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid user context"})
+				return
+			}
+			// Check ownership
+			clientEnt, err := dbpkg.Client.OAuthClient.Get(ctxBg, clientUUID)
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid client_id"})
+				return
+			}
+			if clientEnt.OwnerID == nil || *clientEnt.OwnerID != userUUID {
+				// allow if admin
+				hasAdmin, _ := dbpkg.Client.User.Query().Where(user.IDEQ(userUUID)).QueryRoles().Where(role.NameEQ("admin")).Exist(ctxBg)
+				if !hasAdmin {
+					c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "User cannot register scopes for other clients"})
+					return
+				}
+			}
+		} else {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Missing client or user context"})
+			return
+		}
+	}
+
 	exists, err := dbpkg.Client.Scope.Query().Where(
 		scope.ClientIDEQ(clientUUID),
 		scope.KeyEQ(req.Scope),
@@ -204,54 +212,81 @@ func listScopesHandler(c *gin.Context) {
 		}
 	}
 	
-	// If no client context, check for admin role (user authentication)
+	// If no client context, handle user or admin flows
 	if clientUUID == uuid.Nil {
-		userID, ok := c.Get("user_id")
-		if !ok {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Missing client or user context"})
-			return
-		}
-		
-		userUUID, ok := userID.(uuid.UUID)
-		if !ok {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid user context"})
-			return
-		}
-		
-		// Verify user has admin role
-		hasRole, err := dbpkg.Client.User.Query().
-			Where(user.IDEQ(userUUID)).
-			QueryRoles().
-			Where(role.NameEQ("admin")).
-			Exist(ctxBg)
-		
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify permissions"})
-			return
-		}
-		
-		if !hasRole {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "User does not have admin permission"})
-			return
-		}
-		
-		// For admin user, get client_id from query parameter
+		// If client_id query provided, try to parse
 		if requested := strings.TrimSpace(c.Query("client_id")); requested != "" {
 			if requestedUUID, err := uuid.Parse(requested); err == nil {
 				clientUUID = requestedUUID
 			}
 		}
-		
-		if clientUUID == uuid.Nil {
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "client_id is required in query parameter for admin users"})
-			return
-		}
-	}
 
-	if requested := strings.TrimSpace(c.Query("client_id")); requested != "" {
-		if requestedUUID, err := uuid.Parse(requested); err != nil || requestedUUID != clientUUID {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "client_id does not match"})
-			return
+		// If still no client UUID, require user context (non-client request)
+		if clientUUID == uuid.Nil {
+			userID, ok := c.Get("user_id")
+			if !ok {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Missing client or user context"})
+				return
+			}
+			userUUID, ok := userID.(uuid.UUID)
+			if !ok {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid user context"})
+				return
+			}
+
+			// If not admin, user must provide client_id to list scopes and that client must be owned by them
+			hasAdmin, err := dbpkg.Client.User.Query().Where(user.IDEQ(userUUID)).QueryRoles().Where(role.NameEQ("admin")).Exist(ctxBg)
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify permissions"})
+				return
+			}
+			if !hasAdmin {
+				// require client_id param for non-admin users
+				requested := strings.TrimSpace(c.Query("client_id"))
+				if requested == "" {
+					c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "client_id is required for non-admin users"})
+					return
+				}
+				requestedUUID, err := uuid.Parse(requested)
+				if err != nil {
+					c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid client_id"})
+					return
+				}
+				// verify ownership
+				clientEnt, err := dbpkg.Client.OAuthClient.Get(ctxBg, requestedUUID)
+				if err != nil {
+					c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid client_id"})
+					return
+				}
+				if clientEnt.OwnerID == nil || *clientEnt.OwnerID != userUUID {
+					c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Cannot view scopes for other clients"})
+					return
+				}
+				clientUUID = requestedUUID
+			}
+		} else {
+			// client_id was provided in query; if user context present and not admin, ensure ownership
+			if userID, ok := c.Get("user_id"); ok {
+				userUUID, ok := userID.(uuid.UUID)
+				if ok {
+					hasAdmin, _ := dbpkg.Client.User.Query().Where(user.IDEQ(userUUID)).QueryRoles().Where(role.NameEQ("admin")).Exist(ctxBg)
+					if !hasAdmin {
+						clientEnt, err := dbpkg.Client.OAuthClient.Get(ctxBg, clientUUID)
+						if err != nil {
+							c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid client_id"})
+							return
+						}
+						if clientEnt.OwnerID == nil || *clientEnt.OwnerID != userUUID {
+							c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Cannot view scopes for other clients"})
+							return
+						}
+					}
+				}
+			} else {
+				// no user context and no client auth: unauthorized
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Missing client or user context"})
+				return
+			}
 		}
 	}
 	scopes, err := dbpkg.Client.Scope.Query().Where(scope.ClientIDEQ(clientUUID)).All(ctxBg)

@@ -5,11 +5,14 @@ interface UserInfo {
   id: string;
   email: string;
   username: string;
+  roles?: string[];
+  permissions?: string[];
 }
 
 export default function Navigation() {
   const [user, setUser] = useState<UserInfo | null>(null);
   const [loading, setLoading] = useState(true);
+  const [forbidden, setForbidden] = useState(false);
 
   useEffect(() => {
     const loadUser = async () => {
@@ -17,12 +20,26 @@ export default function Navigation() {
         const response = await fetch("/api/user", {
           credentials: "include",
         });
+
+        if (response.status === 403) {
+          // Not authenticated / forbidden: hide controls
+          setUser(null);
+          setForbidden(true);
+          return;
+        }
+
         if (response.ok) {
           const data = await response.json();
           setUser(data);
+          setForbidden(false);
+        } else {
+          setUser(null);
+          setForbidden(true);
         }
       } catch (error) {
         console.error("Failed to load user:", error);
+        setUser(null);
+        setForbidden(true);
       } finally {
         setLoading(false);
       }
@@ -59,47 +76,60 @@ export default function Navigation() {
               Home
             </a>
           </li>
-          <li>
-            <a
-              href="/panel/clients"
-              className="rounded-full px-3 py-2 text-slate-600 transition hover:bg-amber-50 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
-            >
-              Clients
-            </a>
-          </li>
-          <li>
-            <a
-              href="/panel/users"
-              className="rounded-full px-3 py-2 text-slate-600 transition hover:bg-amber-50 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
-            >
-              Users
-            </a>
-          </li>
-          <li>
-            <a
-              href="/panel/roles"
-              className="rounded-full px-3 py-2 text-slate-600 transition hover:bg-amber-50 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
-            >
-              Roles
-            </a>
-          </li>
-          <li>
-            <a
-              href="/panel/binding"
-              className="rounded-full px-3 py-2 text-slate-600 transition hover:bg-amber-50 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
-            >
-              Binding
-            </a>
-          </li>
-          <li>
-            <a
-              href="/panel/scopes"
-              className="rounded-full px-3 py-2 text-slate-600 transition hover:bg-amber-50 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
-            >
-              Scopes
-            </a>
-          </li>
 
+          {/* Show clients/scopes only when we have a logged-in user */}
+          {user && (
+            <>
+              <li>
+                <a
+                  href="/panel/clients"
+                  className="rounded-full px-3 py-2 text-slate-600 transition hover:bg-amber-50 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+                >
+                  Clients
+                </a>
+              </li>
+
+              {user.roles && user.roles.includes("admin") && (
+                <>
+                  <li>
+                    <a
+                      href="/panel/users"
+                      className="rounded-full px-3 py-2 text-slate-600 transition hover:bg-amber-50 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+                    >
+                      Users
+                    </a>
+                  </li>
+                  <li>
+                    <a
+                      href="/panel/roles"
+                      className="rounded-full px-3 py-2 text-slate-600 transition hover:bg-amber-50 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+                    >
+                      Roles
+                    </a>
+                  </li>
+                  <li>
+                    <a
+                      href="/panel/binding"
+                      className="rounded-full px-3 py-2 text-slate-600 transition hover:bg-amber-50 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+                    >
+                      Binding
+                    </a>
+                  </li>
+                </>
+              )}
+
+              <li>
+                <a
+                  href="/panel/scopes"
+                  className="rounded-full px-3 py-2 text-slate-600 transition hover:bg-amber-50 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+                >
+                  Scopes
+                </a>
+              </li>
+            </>
+          )}
+
+          {/* Right side: user info + logout if logged in, otherwise login link */}
           {!loading && user ? (
             <>
               <li className="text-slate-600 dark:text-slate-400">

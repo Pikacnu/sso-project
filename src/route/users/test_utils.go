@@ -3,7 +3,10 @@ package users
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"strings"
 	"testing"
+	"time"
 
 	ent "sso-server/ent/generated"
 	enttest "sso-server/ent/generated/enttest"
@@ -33,9 +36,23 @@ func openTestDB(t *testing.T) *ent.Client {
 		_ = sqlDB.Close()
 		t.Skipf("skip integration test: db not reachable: %v", err)
 	}
+	// Create an isolated schema for this test run to avoid cross-package collisions
+	schemaName := fmt.Sprintf("test_%d", time.Now().UnixNano())
+	if _, err := sqlDB.Exec(fmt.Sprintf(`CREATE SCHEMA "%s"`, schemaName)); err != nil {
+		_ = sqlDB.Close()
+		t.Skipf("skip integration test: failed to create schema: %v", err)
+	}
 	_ = sqlDB.Close()
 
-	client := enttest.Open(t, "postgres", dsn)
+	// Append options to set search_path to the new schema
+	var schemaDSN string
+	if strings.Contains(dsn, "?") {
+		schemaDSN = dsn + "&options=-c%20search_path%3D" + schemaName
+	} else {
+		schemaDSN = dsn + "?options=-c%20search_path%3D" + schemaName
+	}
+
+	client := enttest.Open(t, "postgres", schemaDSN)
 
 	// Initialize global db.Client for handlers
 	db.Client = client

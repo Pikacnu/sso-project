@@ -8,6 +8,8 @@ import (
 
 	ent "sso-server/ent/generated"
 	"sso-server/ent/generated/oauthclient"
+	"sso-server/ent/generated/user"
+	"sso-server/ent/generated/permission"
 	dbpkg "sso-server/src/db"
 	"sso-server/src/middleware"
 
@@ -35,21 +37,36 @@ type ClientUpdateRequest struct {
 }
 
 func RegisterClientRoutes(router *gin.Engine) {
-	setupClientRoutes := func(prefix string) {
-		group := router.Group(prefix)
-		group.Use(middleware.RequireRole("admin"))
-		group.GET("", listClientsHandler)
-		group.POST("", createClientHandler)
-		group.GET("/:id", getClientHandler)
-		group.PUT("/:id", updateClientHandler)
-		group.POST("/:id/disable", disableClientHandler)
-		group.POST("/:id/enable", enableClientHandler)
-		group.POST("/:id/rotate-secret", rotateClientSecretHandler)
-	}
-	
-	// Register both /clients and /admin/clients routes
-	setupClientRoutes("/clients")
-	setupClientRoutes("/admin/clients")
+	// Public client routes (for users / owners). Management actions are checked inside handlers.
+	pub := router.Group("/clients")
+	pub.GET("", listClientsHandler)
+	pub.POST("", createClientHandler)
+	pub.GET("/:id", getClientHandler)
+
+	// Management routes under /clients require admin for updates/enabled/rotate
+	pub.PUT("/:id", func(c *gin.Context) {
+		c.AbortWithStatusJSON(403, gin.H{"error": "Forbidden - management requires admin"})
+	})
+	pub.POST("/:id/disable", func(c *gin.Context) {
+		c.AbortWithStatusJSON(403, gin.H{"error": "Forbidden - management requires admin"})
+	})
+	pub.POST("/:id/enable", func(c *gin.Context) {
+		c.AbortWithStatusJSON(403, gin.H{"error": "Forbidden - management requires admin"})
+	})
+	pub.POST("/:id/rotate-secret", func(c *gin.Context) {
+		c.AbortWithStatusJSON(403, gin.H{"error": "Forbidden - management requires admin"})
+	})
+
+	// Admin-only routes
+	admin := router.Group("/admin/clients")
+	admin.Use(middleware.RequireRole("admin"))
+	admin.GET("", listClientsHandler)
+	admin.POST("", createClientHandler)
+	admin.GET("/:id", getClientHandler)
+	admin.PUT("/:id", updateClientHandler)
+	admin.POST("/:id/disable", disableClientHandler)
+	admin.POST("/:id/enable", enableClientHandler)
+	admin.POST("/:id/rotate-secret", rotateClientSecretHandler)
 }
 
 // @Summary List OAuth clients
@@ -63,7 +80,42 @@ func RegisterClientRoutes(router *gin.Engine) {
 // @Router /clients [get]
 func listClientsHandler(c *gin.Context) {
 	ctx := c.Request.Context()
-	clients, err := dbpkg.Client.OAuthClient.Query().All(ctx)
+	path := c.Request.URL.Path
+	// If admin route or user is admin, list all
+	if strings.Contains(path, "/admin/") {
+		clients, err := dbpkg.Client.OAuthClient.Query().All(ctx)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to query clients"})
+			return
+		}
+
+		response := make([]gin.H, 0, len(clients))
+		for _, client := range clients {
+			response = append(response, clientResponse(client))
+		}
+
+		c.JSON(http.StatusOK, response)
+		return
+	}
+
+	// Non-admin: return only clients owned by current user
+	userIDRaw, ok := c.Get("user_id")
+	if !ok {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Missing user context"})
+		return
+	}
+	userIDStr, ok := userIDRaw.(string)
+	if !ok {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid user context"})
+		return
+	}
+	userUUID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid user id"})
+		return
+	}
+
+	clients, err := dbpkg.Client.OAuthClient.Query().Where(oauthclient.OwnerIDEQ(userUUID)).All(ctx)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to query clients"})
 		return
@@ -106,6 +158,34 @@ func getClientHandler(c *gin.Context) {
 		return
 	}
 
+	// If request path contains /admin/, admin middleware already enforced
+	if strings.Contains(c.Request.URL.Path, "/admin/") {
+		c.JSON(http.StatusOK, clientResponse(client))
+		return
+	}
+
+	// Otherwise ensure user is owner
+	userIDRaw, ok := c.Get("user_id")
+	if !ok {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Missing user context"})
+		return
+	}
+	userIDStr, ok := userIDRaw.(string)
+	if !ok {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid user context"})
+		return
+	}
+	userUUID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid user id"})
+		return
+	}
+
+	if client.OwnerID == nil || *client.OwnerID != userUUID {
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Forbidden"})
+		return
+	}
+
 	c.JSON(http.StatusOK, clientResponse(client))
 }
 
@@ -143,6 +223,41 @@ func createClientHandler(c *gin.Context) {
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate secret"})
 		return
+	}
+
+	// Authorization: allow if admin (admin group) OR user has oauth:register permission
+	if !strings.Contains(c.Request.URL.Path, "/admin/") {
+		// Non-admin route: verify user and permission
+		userIDRaw, ok := c.Get("user_id")
+		if !ok {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Missing user context"})
+			return
+		}
+		userIDStr, ok := userIDRaw.(string)
+		if !ok {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid user context"})
+			return
+		}
+		userUUID, err := uuid.Parse(userIDStr)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid user id"})
+			return
+		}
+
+		// Check permission oauth:register
+		hasPerm, err := dbpkg.Client.User.Query().Where(user.IDEQ(userUUID)).
+			QueryRoles().
+			QueryPermissions().
+			Where(permission.KeyEQ("oauth:register")).
+			Exist(c.Request.Context())
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify permissions"})
+			return
+		}
+		if !hasPerm {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Forbidden"})
+			return
+		}
 	}
 
 	builder := dbpkg.Client.OAuthClient.Create().

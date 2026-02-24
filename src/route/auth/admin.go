@@ -7,6 +7,7 @@ import (
 
 	ent "sso-server/ent/generated"
 	"sso-server/ent/generated/role"
+	"sso-server/ent/generated/permission"
 	"sso-server/src/auth"
 	"sso-server/src/db"
 
@@ -136,6 +137,19 @@ func adminInitHandler(c *gin.Context) {
 		// Assign permission to admin role
 		if err == nil {
 			_ = db.Client.Role.UpdateOne(adminRole).AddPermissions(p).Exec(ctx)
+		}
+	}
+
+	// Ensure a default 'user' role exists and grant it minimal permissions (e.g., oauth:register)
+	userRole, err := db.Client.Role.Query().Where(role.NameEQ("user")).Only(ctx)
+	if err != nil && ent.IsNotFound(err) {
+		userRole, err = db.Client.Role.Create().SetName("user").SetDescription("Default non-admin user").Save(ctx)
+		if err == nil {
+			// Attach oauth:register permission if exists
+			p, err := db.Client.Permission.Query().Where(permission.KeyEQ("oauth:register")).Only(ctx)
+			if err == nil {
+				_ = db.Client.Role.UpdateOne(userRole).AddPermissions(p).Exec(ctx)
+			}
 		}
 	}
 

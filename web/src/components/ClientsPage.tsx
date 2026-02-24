@@ -32,6 +32,8 @@ export default function ClientsPage() {
   const [message, setMessage] = useState<Message>({ text: "", variant: "info" });
   const [form, setForm] = useState<ClientForm>(emptyForm);
   const [rotatedSecret, setRotatedSecret] = useState<string | null>(null);
+  const [canCreate, setCanCreate] = useState<boolean>(false);
+  const [isAdmin, setIsAdmin] = useState<boolean>(false);
 
   const messageClasses = useMemo(
     () => ({
@@ -57,6 +59,21 @@ export default function ClientsPage() {
 
   useEffect(() => {
     loadClients();
+    // load user permissions for UI
+    (async () => {
+      try {
+        const res = await fetch("/api/user", { credentials: "include" });
+        if (res.ok) {
+          const u = await res.json();
+          const perms: string[] = u.permissions || [];
+          const roles: string[] = u.roles || [];
+          setCanCreate(perms.includes("oauth:register") || roles.includes("admin"));
+          setIsAdmin(roles.includes("admin"));
+        }
+      } catch (e) {
+        // ignore
+      }
+    })();
   }, []);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -145,20 +162,25 @@ export default function ClientsPage() {
                     <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Scopes: {client.allowed_scopes}</p>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => toggleClient(client)}
-                      className="rounded-full border border-amber-200 px-3 py-1 text-xs font-semibold text-amber-700 transition hover:bg-amber-100 dark:border-amber-700/60 dark:text-amber-300 dark:hover:bg-amber-600/20"
-                    >
-                      {client.is_active ? "Disable" : "Enable"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => rotateSecret(client)}
-                      className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-700"
-                    >
-                      Rotate Secret
-                    </button>
+                    {/* Management actions only for admins */}
+                    {isAdmin && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => toggleClient(client)}
+                          className="rounded-full border border-amber-200 px-3 py-1 text-xs font-semibold text-amber-700 transition hover:bg-amber-100 dark:border-amber-700/60 dark:text-amber-300 dark:hover:bg-amber-600/20"
+                        >
+                          {client.is_active ? "Disable" : "Enable"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => rotateSecret(client)}
+                          className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-700"
+                        >
+                          Rotate Secret
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -171,10 +193,11 @@ export default function ClientsPage() {
           ) : null}
         </div>
 
-        <div className="rounded-3xl border border-amber-100 bg-white/95 p-6 dark:border-slate-800 dark:bg-slate-900/70">
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Create a Client</h2>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Register a new OAuth client application.</p>
-          <form className="mt-5 space-y-4" onSubmit={handleSubmit}>
+        {canCreate ? (
+          <div className="rounded-3xl border border-amber-100 bg-white/95 p-6 dark:border-slate-800 dark:bg-slate-900/70">
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Create a Client</h2>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Register a new OAuth client application.</p>
+            <form className="mt-5 space-y-4" onSubmit={handleSubmit}>
             <label className="block">
               <span className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-700">App Name</span>
               <input
@@ -250,7 +273,13 @@ export default function ClientsPage() {
           {message.text ? (
             <p className={`mt-4 text-sm ${messageClasses[message.variant]}`}>{message.text}</p>
           ) : null}
-        </div>
+          </div>
+        ) : (
+          <div className="rounded-3xl border border-amber-100 bg-white/95 p-6 dark:border-slate-800 dark:bg-slate-900/70">
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Create a Client</h2>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">You do not have permission to register new clients.</p>
+          </div>
+        )}
       </section>
     </PageShell>
   );
