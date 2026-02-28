@@ -8,8 +8,8 @@ import (
 
 	ent "sso-server/ent/generated"
 	"sso-server/ent/generated/oauthclient"
-	"sso-server/ent/generated/user"
 	"sso-server/ent/generated/permission"
+	"sso-server/ent/generated/user"
 	dbpkg "sso-server/src/db"
 	"sso-server/src/middleware"
 

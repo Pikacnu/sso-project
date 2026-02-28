@@ -3,9 +3,9 @@ package middleware
 import (
 	"net/http"
 
-	"sso-server/ent/generated/user"
 	"sso-server/ent/generated/permission"
 	"sso-server/ent/generated/role"
+	"sso-server/ent/generated/user"
 	dbpkg "sso-server/src/db"
 
 	"github.com/gin-gonic/gin"

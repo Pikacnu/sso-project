@@ -204,14 +204,14 @@ func registerScopeHandler(c *gin.Context) {
 func listScopesHandler(c *gin.Context) {
 	var clientUUID uuid.UUID
 	var ctxBg = context.Background()
-	
+
 	// Try to get client_id from context (client authentication)
 	if clientID, ok := c.Get("client_id"); ok {
 		if id, ok := clientID.(uuid.UUID); ok {
 			clientUUID = id
 		}
 	}
-	
+
 	// If no client context, handle user or admin flows
 	if clientUUID == uuid.Nil {
 		// If client_id query provided, try to parse
@@ -536,7 +536,7 @@ func adminDeleteScopeHandler(c *gin.Context) {
 	}
 
 	ctxBg := context.Background()
-	
+
 	// Check if scope exists
 	scopeEnt, err := dbpkg.Client.Scope.Get(ctxBg, scopeUUID)
 	if err != nil {

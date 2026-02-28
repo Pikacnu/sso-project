@@ -7,8 +7,8 @@ import (
 	"sso-server/src/middleware"
 
 	ent "sso-server/ent/generated"
-	"sso-server/ent/generated/user"
 	"sso-server/ent/generated/role"
+	"sso-server/ent/generated/user"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"

@@ -3,11 +3,11 @@ package middleware
 import (
 	"context"
 	"net/http"
-	"strings"
 	ent "sso-server/ent/generated"
 	"sso-server/ent/generated/session"
 	"sso-server/src/auth"
 	dbpkg "sso-server/src/db"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"

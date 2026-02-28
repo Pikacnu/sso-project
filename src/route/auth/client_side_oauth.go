@@ -3,10 +3,13 @@ package auth
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
 	"sso-server/src/auth"
 	dbpkg "sso-server/src/db"
 	"sso-server/src/providors"
+	"strings"
 	"time"
 
 	ent "sso-server/ent/generated"
@@ -296,6 +299,10 @@ func getGoogleUser(client *http.Client) (*ReturnedDefaultUser, error) {
 		return nil, err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("google userinfo request failed: status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
 	var data struct {
 		Sub     string `json:"sub"`
 		Name    string `json:"name"`

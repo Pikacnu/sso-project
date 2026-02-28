@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	ent "sso-server/ent/generated"
-	"sso-server/ent/generated/role"
 	"sso-server/ent/generated/permission"
+	"sso-server/ent/generated/role"
 	"sso-server/src/auth"
 	"sso-server/src/db"
 

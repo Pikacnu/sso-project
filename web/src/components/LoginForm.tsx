@@ -88,11 +88,11 @@ export default function LoginPage() {
         return;
       }
 
-      // For successful registration/login that requires email verification
-      if ((result.message?.includes("sent") || result.message?.includes("Verification")) && tab === "register") {
+      // For successful registration or forgot-password flows that send an email
+      if ((result.message?.includes("sent") || result.message?.includes("Verification")) && (tab === "register" || tab === "forgot")) {
         setEmailSent(true);
         setMessage({
-          text: result.message || "Verification email sent! Check your inbox.",
+          text: result.message || (tab === "forgot" ? "Password reset email sent! Check your inbox." : "Verification email sent! Check your inbox."),
           variant: "success",
         });
         form.reset();
